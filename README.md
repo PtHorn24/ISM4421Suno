@@ -4,6 +4,7 @@ A one-page AI music generator built on the [Suno API](https://docs.sunoapi.org),
 
 ## Features
 
+- **Profiles.** Each user has a profile with a display name, photo, short bio and favorite genres (which appear first in the style picker). New users are asked to set it up after their first sign-in, and can edit it any time from their avatar in the top right.
 - **Email login.** Visitors must sign in with email and password (Supabase Auth) before they can use the app. Includes sign-up with email confirmation, forgot/reset password and sign out. The Netlify proxy also checks the login, so the API can't be used without an account.
 - **API key box.** Paste your key from [sunoapi.org/api-key](https://sunoapi.org/api-key). It's saved in your browser's localStorage and tested right away. Remaining credits show in the header.
 - **Simple mode.** Describe a song in plain English. Style chips and idea starters are included.
@@ -22,6 +23,13 @@ One-time setup in the Supabase dashboard:
 2. **Authentication → Sign In / Providers → Email** is on by default. Leave **Confirm email** on unless you want people to sign in without confirming.
 3. Supabase's built-in email sender only allows a few emails per hour. For real use, add your own SMTP server under **Authentication → Emails → SMTP Settings**.
 
+### Database
+
+`supabase/migrations/20261005200000_profiles.sql` (already applied to the project) creates:
+
+- `public.profiles`: one row per user (`display_name`, `bio`, `avatar_url`, `favorite_genres`), created automatically at sign-up by a trigger. Row Level Security lets each user read and edit only their own row.
+- `avatars` storage bucket: public to view, max 2 MB per file, images only. Users can only upload to or delete from a folder named after their own user ID. The app crops photos to 256×256 before uploading.
+
 Each user's saved Suno key and track history are stored in the browser under their own user ID, so two people sharing a computer don't see each other's tracks.
 
 ## Project layout
@@ -31,6 +39,7 @@ public/index.html                  the whole app (HTML + CSS + JS)
 netlify/functions/suno.mjs         proxy: /api/suno/* → https://api.sunoapi.org/api/v1/* (signed-in users only)
 netlify/functions/suno-callback.mjs  acknowledges Suno's required callBackUrl
 netlify.toml                       Netlify build config
+supabase/migrations/               database schema (profiles table, avatars bucket)
 ```
 
 The browser talks to `/api/suno/*`, and a Netlify Function forwards the request to the Suno API. That avoids CORS problems. The function only forwards the endpoints the app uses.
