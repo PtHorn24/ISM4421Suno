@@ -100,7 +100,7 @@
     font-size: 13px; font-weight: 600; margin-bottom: 6px;
   }
   .field > span.lbl em { font-style: normal; font-weight: 400; color: var(--muted); font-size: 12px; }
-  input[type=text], input[type=password], input[type=number], select, textarea {
+  input[type=text], input[type=email], input[type=password], input[type=number], select, textarea {
     width: 100%; padding: 10px 12px;
     background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
     outline: none; transition: border-color .15s, box-shadow .15s;
@@ -226,12 +226,62 @@
   .toast.ok { border-left-color: var(--ok); }
   @keyframes pop { from { transform: translateY(8px); opacity: 0; } }
 
+  /* ---------- Login ---------- */
+  body:not(.authed) > header, body:not(.authed) > main, body:not(.authed) > footer { display: none; }
+  body.authed #authScreen { display: none; }
+  #authScreen { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+  .auth-box { width: 100%; max-width: 400px; }
+  .auth-box .brand { justify-content: center; margin-bottom: 20px; }
+  .auth-box form { display: grid; }
+  .auth-msg { font-size: 13px; padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; border: 1px solid var(--border); background: var(--panel-2); }
+  .auth-msg.err { border-color: rgba(239, 68, 68, .5); color: #fca5a5; }
+  .auth-msg.ok { border-color: rgba(34, 197, 94, .5); color: #86efac; }
+  .auth-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; font-size: 13px; flex-wrap: wrap; }
+  .auth-links button { background: none; border: 0; padding: 0; color: #c4a1ff; cursor: pointer; text-decoration: underline; }
+  .auth-loading { color: var(--muted); display: flex; align-items: center; gap: 10px; }
+  .user-pill { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 640px) { .user-pill { display: none; } }
+
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px 16px 40px; }
   .spin { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: rot .7s linear infinite; }
   @keyframes rot { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
+
+<!-- Login screen: shown until the visitor signs in -->
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="brand">
+      <div class="logo">🎵</div>
+      <div>Suno Studio<small>AI music generator</small></div>
+    </div>
+    <div class="card">
+      <div class="auth-loading" id="authLoading"><span class="spin"></span> Loading…</div>
+      <div id="authPanel" class="hidden">
+        <h2 id="authTitle">Sign in</h2>
+        <p class="sub" id="authSub">Use your email and password.</p>
+        <div class="auth-msg hidden" id="authMsg" role="status"></div>
+        <form id="authForm" novalidate>
+          <label class="field" id="authEmailWrap">
+            <span class="lbl">Email</span>
+            <input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com" required>
+          </label>
+          <label class="field" id="authPassWrap">
+            <span class="lbl">Password <em id="authPassHint"></em></span>
+            <input type="password" id="authPass" autocomplete="current-password" minlength="6" required>
+          </label>
+          <button class="btn primary big" type="submit" id="authSubmit">Sign in</button>
+        </form>
+        <div class="auth-links">
+          <button type="button" data-auth-view="signup" id="toSignup">Create an account</button>
+          <button type="button" data-auth-view="signin" id="toSignin" class="hidden">I already have an account</button>
+          <button type="button" data-auth-view="forgot" id="toForgot">Forgot password?</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <header>
   <div class="brand">
@@ -241,6 +291,8 @@
   <div class="spacer"></div>
   <span class="pill" id="creditsPill" title="Remaining API credits"><span class="dot" id="keyDot"></span><span id="creditsText">No API key</span></span>
   <button class="btn sm" id="settingsBtn" type="button">🔑 API key</button>
+  <span class="pill user-pill" id="userEmail" title="Signed in"></span>
+  <button class="btn sm" id="signOutBtn" type="button">Sign out</button>
 </header>
 
 <main>
@@ -419,6 +471,7 @@
 
 <div id="toasts"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script>
 (() => {
   "use strict";
@@ -435,8 +488,13 @@
   const POLL_MS = 8000;
   const LYRICS_POLL_MS = 4000;
   const MAX_POLL_MS = 15 * 60 * 1000;
-  const LS_KEY = "suno.apiKey";
-  const LS_LIB = "suno.library.v1";
+  // Supabase project used for email login. Both values are public by design
+  // (the publishable key only allows what your auth settings and RLS allow).
+  const SUPABASE_URL = "https://exdkeaomgxdnnzbszgfs.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_QJaN40fHQHOy6P7ylV78GA_i-BuWuue";
+  // Saved key and history are kept per signed-in user (set in startApp).
+  let LS_KEY = "suno.apiKey";
+  let LS_LIB = "suno.library.v1";
 
   const FAIL_STATES = new Set([
     "CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION",
@@ -515,6 +573,9 @@
     const qs = query ? `?${new URLSearchParams(query)}` : "";
     const headers = { "Content-Type": "application/json" };
     if (key) headers.Authorization = `Bearer ${key}`;
+    // The Netlify proxy only serves signed-in users.
+    const token = await getAccessToken();
+    if (token && API_BASE.startsWith("/")) headers["X-User-Token"] = token;
     let res;
     try {
       res = await fetch(`${API_BASE}/${path}${qs}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
@@ -523,6 +584,12 @@
     }
     let data;
     try { data = await res.json(); } catch { data = null; }
+    if (data?.authError) {
+      sessionLost();
+      const err = new Error(data.msg || "Please sign in again.");
+      err.code = "AUTH";
+      throw err;
+    }
     const code = data?.code ?? res.status;
     if (!res.ok || code !== 200) {
       const friendly = CODE_MSG[code];
@@ -552,7 +619,6 @@
   // Library (persisted in localStorage)
   // ---------------------------------------------------------------------------
   let library = [];
-  try { library = JSON.parse(localStorage.getItem(LS_LIB) || "[]"); } catch { library = []; }
   const saveLib = () => { try { localStorage.setItem(LS_LIB, JSON.stringify(library.slice(0, 100))); } catch {} };
   const findTask = (id) => library.find((t) => t.taskId === id);
   const isDone = (t) => t.status === "SUCCESS" || FAIL_STATES.has(t.status);
@@ -688,6 +754,7 @@
             if (FAIL_STATES.has(status)) toast(`Generation failed: ${task.error}`, "err");
           }
         } catch (err) {
+          if (err.code === "AUTH") break;
           if (err.code === 401) {
             task.status = "CREATE_TASK_FAILED"; task.error = err.message;
             saveLib(); renderLibrary(); break;
@@ -900,7 +967,7 @@
       while (Date.now() - start < 3 * 60 * 1000) {
         await sleep(LYRICS_POLL_MS);
         let info;
-        try { info = await api("lyrics/record-info", { query: { taskId } }); } catch (err) { if (err.code === 401) throw err; continue; }
+        try { info = await api("lyrics/record-info", { query: { taskId } }); } catch (err) { if (err.code === 401 || err.code === "AUTH") throw err; continue; }
         const status = info?.status || info?.response?.status;
         const items = info?.response?.data || [];
         if (FAIL_STATES.has(status)) throw new Error(info?.errorMessage || info?.response?.errorMessage || STATUS_LABEL[status] || "Lyrics generation failed");
@@ -987,14 +1054,30 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Boot
+  // Boot (runs once a user is signed in)
   // ---------------------------------------------------------------------------
-  setMode("simple");
-  syncKeyCard();
-  renderLibrary();
-  refreshCredits();
-  library.filter((t) => !isDone(t)).forEach((t) => pollTask(t.taskId));
-  setInterval(() => { if (!document.hidden) renderLibraryMetaOnly(); }, 60000);
+  let started = false;
+  function startApp(user) {
+    if (started) return;
+    started = true;
+    LS_KEY = `suno.apiKey:${user.id}`;
+    LS_LIB = `suno.library.v1:${user.id}`;
+    try {
+      // Hand data saved before login existed to the first account that signs in here.
+      for (const [oldKey, newKey] of [["suno.apiKey", LS_KEY], ["suno.library.v1", LS_LIB]]) {
+        const v = localStorage.getItem(oldKey);
+        if (v !== null) { if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, v); localStorage.removeItem(oldKey); }
+      }
+    } catch {}
+    try { library = JSON.parse(localStorage.getItem(LS_LIB) || "[]"); } catch { library = []; }
+
+    setMode("simple");
+    syncKeyCard();
+    renderLibrary();
+    refreshCredits();
+    library.filter((t) => !isDone(t)).forEach((t) => pollTask(t.taskId));
+    setInterval(() => { if (!document.hidden) renderLibraryMetaOnly(); }, 60000);
+  }
   function renderLibraryMetaOnly() {
     // Refresh "x min ago" labels without disturbing audio players.
     $$(".task").forEach((el) => {
@@ -1004,6 +1087,157 @@
       meta.textContent = `${kind}${t.model || ""}${t.style ? " · " + t.style : ""} · ${ago(t.createdAt)}`;
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Email login (Supabase Auth)
+  // ---------------------------------------------------------------------------
+  const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  });
+  const redirectTo = /^https?:$/.test(location.protocol) ? `${location.origin}/` : undefined;
+
+  async function getAccessToken() {
+    if (!sb) return "";
+    try { const { data } = await sb.auth.getSession(); return data.session?.access_token || ""; } catch { return ""; }
+  }
+
+  let lostHandled = false;
+  async function sessionLost() {
+    if (lostHandled) return;
+    lostHandled = true;
+    toast("Your session expired. Please sign in again.", "err");
+    try { await sb?.auth.signOut({ scope: "local" }); } catch {}
+    location.reload();
+  }
+
+  const AUTH_VIEWS = {
+    signin: { title: "Sign in", sub: "Use your email and password.", submit: "Sign in", pass: true, passAuto: "current-password", hint: "" },
+    signup: { title: "Create your account", sub: "Sign up with your email. We'll send a link to confirm it.", submit: "Create account", pass: true, passAuto: "new-password", hint: "at least 6 characters" },
+    forgot: { title: "Reset your password", sub: "Enter your email and we'll send you a reset link.", submit: "Send reset link", pass: false },
+    reset: { title: "Choose a new password", sub: "Enter a new password for your account.", submit: "Save new password", pass: true, passAuto: "new-password", hint: "at least 6 characters", noEmail: true },
+  };
+  let authView = "signin";
+
+  function authMsg(text, kind = "") {
+    const el = $("#authMsg");
+    el.className = `auth-msg ${kind}`;
+    el.textContent = text;
+    el.classList.toggle("hidden", !text);
+  }
+
+  function setAuthView(v, { keepMsg = false } = {}) {
+    authView = v;
+    const cfg = AUTH_VIEWS[v];
+    $("#authTitle").textContent = cfg.title;
+    $("#authSub").textContent = cfg.sub;
+    $("#authSubmit").textContent = cfg.submit;
+    $("#authEmailWrap").classList.toggle("hidden", !!cfg.noEmail);
+    $("#authPassWrap").classList.toggle("hidden", !cfg.pass);
+    $("#authPass").autocomplete = cfg.passAuto || "off";
+    $("#authPassHint").textContent = cfg.hint || "";
+    $("#authPass").value = "";
+    $("#toSignup").classList.toggle("hidden", v !== "signin");
+    $("#toSignin").classList.toggle("hidden", v === "signin" || v === "reset");
+    $("#toForgot").classList.toggle("hidden", v !== "signin");
+    if (!keepMsg) authMsg("");
+    showAuth();
+    (cfg.noEmail || ($("#authEmail").value && cfg.pass) ? $("#authPass") : $("#authEmail")).focus();
+  }
+
+  function showAuth() {
+    document.body.classList.remove("authed");
+    $("#authLoading").classList.add("hidden");
+    $("#authPanel").classList.remove("hidden");
+  }
+
+  function showApp(user) {
+    $("#userEmail").textContent = user.email || "Signed in";
+    $("#userEmail").title = `Signed in as ${user.email || ""}`;
+    document.body.classList.add("authed");
+    startApp(user);
+  }
+
+  $$("[data-auth-view]").forEach((b) => b.addEventListener("click", () => setAuthView(b.dataset.authView)));
+
+  $("#authForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#authEmail").value.trim();
+    const password = $("#authPass").value;
+    const cfg = AUTH_VIEWS[authView];
+    if (!cfg.noEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { authMsg("Enter a valid email address.", "err"); return; }
+    if (cfg.pass && password.length < 6) { authMsg("Password must be at least 6 characters.", "err"); return; }
+
+    const btn = $("#authSubmit");
+    btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
+    authMsg("");
+    try {
+      if (authView === "signin") {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          if (/not confirmed/i.test(error.message)) throw new Error("Please confirm your email first. Check your inbox for the link.");
+          if (/invalid login credentials/i.test(error.message)) throw new Error("Wrong email or password.");
+          throw error;
+        }
+      } else if (authView === "signup") {
+        const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
+        if (error) throw error;
+        if (!data.session) {
+          // Email confirmation is on: the user must click the link we just sent.
+          setAuthView("signin", { keepMsg: true });
+          $("#authEmail").value = email;
+          authMsg(`Almost done. We sent a confirmation link to ${email}. Click it, then sign in.`, "ok");
+        }
+      } else if (authView === "forgot") {
+        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) throw error;
+        setAuthView("signin", { keepMsg: true });
+        authMsg(`If ${email} has an account, a reset link is on its way.`, "ok");
+      } else if (authView === "reset") {
+        const { error } = await sb.auth.updateUser({ password });
+        if (error) throw error;
+        const { data } = await sb.auth.getSession();
+        toast("Password updated", "ok");
+        if (data.session) showApp(data.session.user); else setAuthView("signin");
+      }
+    } catch (err) {
+      authMsg(err.message || "Something went wrong. Try again.", "err");
+    } finally {
+      btn.disabled = false; btn.textContent = AUTH_VIEWS[authView].submit;
+    }
+  });
+
+  $("#signOutBtn").addEventListener("click", async () => {
+    $("#signOutBtn").disabled = true;
+    try { await sb.auth.signOut(); } catch {}
+    location.reload();
+  });
+
+  (async function initAuth() {
+    if (!sb) {
+      showAuth();
+      $("#authForm").classList.add("hidden");
+      $(".auth-links").classList.add("hidden");
+      authMsg("Could not load the login library. Check your connection and reload.", "err");
+      return;
+    }
+    // Errors from an expired or reused email link come back in the URL hash.
+    const hash = new URLSearchParams(location.hash.slice(1));
+    const linkError = hash.get("error_description");
+    const recovering = hash.get("type") === "recovery";
+
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") { setAuthView("reset"); return; }
+      if (event === "SIGNED_IN" && session && !recovering && authView !== "reset") setTimeout(() => showApp(session.user), 0);
+      if (event === "SIGNED_OUT" && started) location.reload();
+    });
+
+    const { data } = await sb.auth.getSession();
+    if (linkError || location.hash.includes("access_token")) history.replaceState(null, "", location.pathname + location.search);
+    if (recovering || authView === "reset") { setAuthView("reset"); return; }
+    if (data.session) { showApp(data.session.user); return; }
+    setAuthView("signin");
+    if (linkError) authMsg(`${linkError.replace(/\+/g, " ")}. Request a new link and try again.`, "err");
+  })();
 })();
 </script>
 </body>
