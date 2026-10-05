@@ -239,8 +239,18 @@
   .auth-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; font-size: 13px; flex-wrap: wrap; }
   .auth-links button { background: none; border: 0; padding: 0; color: #c4a1ff; cursor: pointer; text-decoration: underline; }
   .auth-loading { color: var(--muted); display: flex; align-items: center; gap: 10px; }
-  .user-pill { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-  @media (max-width: 640px) { .user-pill { display: none; } }
+
+  /* ---------- Profile ---------- */
+  .avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; object-fit: cover; background: var(--grad);
+    display: inline-grid; place-items: center; font-weight: 700; font-size: 13px; color: white; overflow: hidden; }
+  .avatar.lg { width: 84px; height: 84px; font-size: 32px; }
+  #profileBtn { padding: 4px 12px 4px 4px; border-radius: 999px; gap: 8px; }
+  #profileName { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 640px) { #profileName { display: none; } #profileBtn { padding: 4px; } }
+  .avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .avatar-row .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip.on { border-color: var(--accent); color: var(--text); background: rgba(168, 85, 247, .18); }
+  .chip.fav { border-color: rgba(168, 85, 247, .5); color: var(--text); }
 
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px 16px 40px; }
   .spin { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: rot .7s linear infinite; }
@@ -291,7 +301,7 @@
   <div class="spacer"></div>
   <span class="pill" id="creditsPill" title="Remaining API credits"><span class="dot" id="keyDot"></span><span id="creditsText">No API key</span></span>
   <button class="btn sm" id="settingsBtn" type="button">🔑 API key</button>
-  <span class="pill user-pill" id="userEmail" title="Signed in"></span>
+  <button class="btn sm" id="profileBtn" type="button" title="Your profile"><span class="avatar" id="headerAvatar"></span><span id="profileName">Profile</span></button>
   <button class="btn sm" id="signOutBtn" type="button">Sign out</button>
 </header>
 
@@ -438,6 +448,47 @@
 </main>
 
 <footer>Powered by the <a href="https://docs.sunoapi.org" target="_blank" rel="noopener">Suno API</a>. Generated files are kept by the API for about 14 days, so download what you want to keep.</footer>
+
+<!-- Profile modal -->
+<div class="modal-bg hidden" id="profileModal">
+  <div class="card modal">
+    <h2 id="profileTitle">Your profile</h2>
+    <p class="sub" id="profileSub">This is how you appear in Suno Studio.</p>
+    <form id="profileForm" autocomplete="off">
+      <div class="avatar-row">
+        <span class="avatar lg" id="pfAvatar"></span>
+        <div>
+          <div class="btns">
+            <label class="btn sm" for="pfFile">📷 Upload photo</label>
+            <button class="btn sm danger" type="button" id="pfRemovePhoto">Remove</button>
+          </div>
+          <div class="hint">PNG, JPG, WebP or GIF. We crop it to a square.</div>
+          <input type="file" id="pfFile" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden">
+        </div>
+      </div>
+      <label class="field">
+        <span class="lbl">Display name <em><span id="pfNameCount">0</span>/50</em></span>
+        <input type="text" id="pfName" maxlength="50" placeholder="What should we call you?" required>
+      </label>
+      <label class="field">
+        <span class="lbl">Email <em>used to sign in</em></span>
+        <input type="text" id="pfEmail" disabled>
+      </label>
+      <label class="field">
+        <span class="lbl">About you <em><span id="pfBioCount">0</span>/300</em></span>
+        <textarea id="pfBio" maxlength="300" style="min-height:70px" placeholder="Bedroom producer, lo-fi lover, aspiring songwriter…"></textarea>
+      </label>
+      <div class="field">
+        <span class="lbl">Favorite genres <em>up to 10, shown first in the style picker</em></span>
+        <div class="chips" id="pfGenres" style="margin-top:0"></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" type="button" id="pfCancel">Cancel</button>
+        <button class="btn primary" type="submit" id="pfSave">Save profile</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- Extend modal -->
 <div class="modal-bg hidden" id="extendModal">
@@ -619,6 +670,9 @@
   // Library (persisted in localStorage)
   // ---------------------------------------------------------------------------
   let library = [];
+  let currentUser = null;
+  let profile = null; // row from public.profiles
+  let profileLoaded = false;
   const saveLib = () => { try { localStorage.setItem(LS_LIB, JSON.stringify(library.slice(0, 100))); } catch {} };
   const findTask = (id) => library.find((t) => t.taskId === id);
   const isDone = (t) => t.status === "SUCCESS" || FAIL_STATES.has(t.status);
@@ -864,7 +918,14 @@
     const c = e.target.closest("[data-idea]"); if (!c) return;
     $("#prompt").value = c.dataset.idea; $("#prompt").dispatchEvent(new Event("input"));
   });
-  $("#styleChips").innerHTML = STYLES.map((s) => `<button type="button" class="chip" data-style="${esc(s)}">+ ${esc(s)}</button>`).join("");
+  function renderStyleChips() {
+    const favs = profile?.favorite_genres || [];
+    const ordered = [...favs, ...STYLES.filter((s) => !favs.includes(s))];
+    $("#styleChips").innerHTML = ordered.map((s) => favs.includes(s)
+      ? `<button type="button" class="chip fav" data-style="${esc(s)}" title="One of your favorites">★ ${esc(s)}</button>`
+      : `<button type="button" class="chip" data-style="${esc(s)}">+ ${esc(s)}</button>`).join("");
+  }
+  renderStyleChips();
   $("#styleChips").addEventListener("click", (e) => {
     const c = e.target.closest("[data-style]"); if (!c) return;
     const cur = $("#style").value.split(",").map((x) => x.trim()).filter(Boolean);
@@ -1016,7 +1077,11 @@
   const closeExtend = () => { $("#extendModal").classList.add("hidden"); extendCtx = null; };
   $("#exCancel").addEventListener("click", closeExtend);
   $("#extendModal").addEventListener("click", (e) => { if (e.target.id === "extendModal") closeExtend(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && extendCtx) closeExtend(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (extendCtx) closeExtend();
+    else if (!$("#profileModal").classList.contains("hidden")) closeProfile();
+  });
 
   $("#extendForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1151,10 +1216,11 @@
   }
 
   function showApp(user) {
-    $("#userEmail").textContent = user.email || "Signed in";
-    $("#userEmail").title = `Signed in as ${user.email || ""}`;
+    currentUser = user;
+    renderProfileBadge();
     document.body.classList.add("authed");
     startApp(user);
+    loadProfile(user);
   }
 
   $$("[data-auth-view]").forEach((b) => b.addEventListener("click", () => setAuthView(b.dataset.authView)));
@@ -1203,6 +1269,171 @@
       authMsg(err.message || "Something went wrong. Try again.", "err");
     } finally {
       btn.disabled = false; btn.textContent = AUTH_VIEWS[authView].submit;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Profile (public.profiles table + "avatars" storage bucket)
+  // ---------------------------------------------------------------------------
+  let draft = null; // edits in the open profile form
+
+  const initial = (name) => (name || "?").trim().charAt(0).toUpperCase() || "?";
+  function avatarHtml(url, name) {
+    return url ? `<img src="${esc(url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc(initial(name));
+  }
+
+  function renderProfileBadge() {
+    const name = profile?.display_name || currentUser?.email?.split("@")[0] || "Profile";
+    $("#headerAvatar").innerHTML = avatarHtml(safeUrl(profile?.avatar_url), name);
+    $("#profileName").textContent = name;
+    $("#profileBtn").title = `Your profile (${currentUser?.email || ""})`;
+  }
+
+  async function loadProfile(user) {
+    try {
+      let { data, error } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        // Normally created at sign-up by a database trigger; create it here if missing.
+        ({ data, error } = await sb.from("profiles").upsert({ id: user.id }).select().single());
+        if (error) throw error;
+      }
+      profile = data;
+      profileLoaded = true;
+      renderProfileBadge();
+      renderStyleChips();
+      let skipped = false;
+      try { skipped = localStorage.getItem(`suno.profileSkipped:${user.id}`) === "1"; } catch {}
+      if (!profile.display_name && !skipped) openProfile({ welcome: true });
+    } catch (err) {
+      toast(`Could not load your profile: ${err.message}`, "err");
+    }
+  }
+
+  function renderDraft() {
+    $("#pfAvatar").innerHTML = avatarHtml(safeUrl(draft.avatar_url), $("#pfName").value || currentUser?.email);
+    $("#pfRemovePhoto").classList.toggle("hidden", !draft.avatar_url);
+    $("#pfGenres").innerHTML = STYLES.map((s) =>
+      `<button type="button" class="chip ${draft.favorite_genres.includes(s) ? "on" : ""}" data-genre="${esc(s)}">${draft.favorite_genres.includes(s) ? "★" : "+"} ${esc(s)}</button>`).join("");
+  }
+
+  function openProfile({ welcome = false } = {}) {
+    if (!profileLoaded) { toast("Profile is still loading…"); return; }
+    draft = { avatar_url: profile.avatar_url || "", favorite_genres: [...(profile.favorite_genres || [])], welcome };
+    $("#profileTitle").textContent = welcome ? "👋 Welcome! Set up your profile" : "Your profile";
+    $("#profileSub").textContent = welcome ? "Pick a name and a photo. You can change these any time from the top right." : "This is how you appear in Suno Studio.";
+    $("#pfCancel").textContent = welcome ? "Skip for now" : "Cancel";
+    $("#pfName").value = profile.display_name || "";
+    $("#pfBio").value = profile.bio || "";
+    $("#pfEmail").value = currentUser?.email || "";
+    ["#pfName", "#pfBio"].forEach((sel) => $(sel).dispatchEvent(new Event("input")));
+    renderDraft();
+    $("#profileModal").classList.remove("hidden");
+    $("#pfName").focus();
+  }
+
+  function closeProfile() {
+    if (draft?.welcome) { try { localStorage.setItem(`suno.profileSkipped:${currentUser.id}`, "1"); } catch {} }
+    $("#profileModal").classList.add("hidden");
+    $("#pfFile").value = "";
+    draft = null;
+  }
+
+  counter("#pfName", "#pfNameCount");
+  counter("#pfBio", "#pfBioCount");
+  $("#pfName").addEventListener("input", () => { if (draft && !draft.avatar_url) renderDraft(); });
+  $("#profileBtn").addEventListener("click", () => openProfile());
+  $("#pfCancel").addEventListener("click", closeProfile);
+  $("#profileModal").addEventListener("click", (e) => { if (e.target.id === "profileModal") closeProfile(); });
+
+  $("#pfGenres").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-genre]"); if (!c || !draft) return;
+    const g = c.dataset.genre, list = draft.favorite_genres;
+    if (list.includes(g)) draft.favorite_genres = list.filter((x) => x !== g);
+    else if (list.length >= 10) { toast("Pick up to 10 favorite genres", "err"); return; }
+    else list.push(g);
+    renderDraft();
+  });
+
+  // Crop to a centered square and shrink to 256px so uploads stay small.
+  function squareImage(file, size = 256) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = size;
+        canvas.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not process the image."))), "image/jpeg", 0.88);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file isn't an image we can read.")); };
+      img.src = url;
+    });
+  }
+
+  $("#pfFile").addEventListener("change", async () => {
+    const file = $("#pfFile").files[0];
+    if (!file || !draft) return;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { toast("Choose a PNG, JPG, WebP or GIF image", "err"); return; }
+    if (file.size > 15 * 1024 * 1024) { toast("That image is too large (max 15 MB)", "err"); return; }
+    const label = $("label[for=pfFile]");
+    label.innerHTML = `<span class="spin"></span> Uploading…`;
+    try {
+      const blob = await squareImage(file);
+      const path = `${currentUser.id}/avatar-${Date.now()}.jpg`;
+      const { error } = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
+      if (error) throw error;
+      draft.avatar_url = sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+      renderDraft();
+    } catch (err) {
+      toast(`Upload failed: ${err.message}`, "err");
+    } finally {
+      label.textContent = "📷 Upload photo";
+      $("#pfFile").value = "";
+    }
+  });
+
+  $("#pfRemovePhoto").addEventListener("click", () => { if (draft) { draft.avatar_url = ""; renderDraft(); } });
+
+  // Delete old avatar files the profile no longer points to.
+  async function cleanupAvatars(keepUrl) {
+    try {
+      const { data } = await sb.storage.from("avatars").list(currentUser.id);
+      const stale = (data || []).map((f) => `${currentUser.id}/${f.name}`).filter((p) => !keepUrl || !keepUrl.endsWith(`/${p}`));
+      if (stale.length) await sb.storage.from("avatars").remove(stale);
+    } catch {}
+  }
+
+  $("#profileForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!draft) return;
+    const display_name = $("#pfName").value.trim();
+    const bio = $("#pfBio").value.trim();
+    if (!display_name) { toast("Enter a display name", "err"); $("#pfName").focus(); return; }
+    const btn = $("#pfSave");
+    btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Saving…`;
+    try {
+      const { data, error } = await sb.from("profiles").upsert({
+        id: currentUser.id,
+        display_name,
+        bio: bio || null,
+        avatar_url: draft.avatar_url || null,
+        favorite_genres: draft.favorite_genres,
+      }).select().single();
+      if (error) throw error;
+      profile = data;
+      renderProfileBadge();
+      renderStyleChips();
+      cleanupAvatars(profile.avatar_url);
+      draft.welcome = false;
+      closeProfile();
+      toast("Profile saved", "ok");
+    } catch (err) {
+      toast(`Could not save your profile: ${err.message}`, "err");
+    } finally {
+      btn.disabled = false; btn.textContent = "Save profile";
     }
   });
 
