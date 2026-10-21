@@ -1,61 +1,55 @@
-# Suno Studio
+# Owls Gameday
 
-A one-page AI music generator built on the [Suno API](https://docs.sunoapi.org), ready to deploy on Netlify.
+An FAU athletics app for ISM 4421: live scores, schedules, results and news for the Florida Atlantic Owls, with game-day weather. It brings together everything from the earlier assignments (email login, profiles, a Netlify Function API proxy, and the Open-Meteo weather from Owl Weather) in one Netlify site.
 
 ## Features
 
-- **Profiles.** Each user has a profile with a display name, photo, short bio and favorite genres (which appear first in the style picker). New users are asked to set it up after their first sign-in, and can edit it any time from their avatar in the top right.
-- **Email login.** Visitors must sign in with email and password (Supabase Auth) before they can use the app. Includes sign-up with email confirmation, forgot/reset password and sign out. The Netlify proxy also checks the login, so the API can't be used without an account.
-- **API key box.** Paste your key from [sunoapi.org/api-key](https://sunoapi.org/api-key). It's saved in your browser's localStorage and tested right away. Remaining credits show in the header.
-- **Simple mode.** Describe a song in plain English. Style chips and idea starters are included.
-- **Custom mode.** Title, style, your own lyrics, vocal gender, negative tags, duration, style/weirdness/audio-weight sliders and variety.
-- **AI lyrics.** Generate lyrics from a short idea and drop them into the lyrics box with one click.
-- **Instrumental toggle** and **model picker** (V6, V6 Wild, V6 Mini).
-- **Library.** Every generation shows up with live status, a streaming preview while the track renders, cover art, a player, download, lyrics, copy link and **Extend** (continue a song from any point). History is kept in your browser, and unfinished tasks resume polling after a page reload.
+- **Scores and schedules** for Football, Men's Basketball, Women's Basketball and Volleyball. Each sport has its own page with record, conference standing, home record, every game (results with W/L and score, upcoming games with time and TV), and filters for upcoming, results, home and away.
+- **Live games.** When a game is in progress the score and clock show with a LIVE badge and refresh automatically about every 45 seconds.
+- **Home dashboard.** The next game with a live countdown, the latest results, what's coming up, record cards for every team and the latest news. If you pick favorite teams in your profile, the dashboard shows only those.
+- **Game-day weather** (Open-Meteo, no key needed). The forecast for game time at the venue is shown for the next game and for upcoming football games within about two weeks. Current weather on the Boca Raton campus is in the header, with a °F/°C toggle.
+- **Add to calendar.** Download any upcoming game as a `.ics` file for Google Calendar, Apple Calendar or Outlook.
+- **News.** The latest FAU stories from ESPN for each sport.
+- **Email login** (Supabase Auth): sign up with email confirmation, sign in, forgot password and reset password, sign out.
+- **Password security:**
+  - A strength meter and a live checklist (8+ characters, lowercase, uppercase, number, symbol).
+  - New passwords must be 8+ characters, use 3 of the 4 character types, not be a common password (like `password123` or `goowls`) and not contain your email name.
+  - **Suggest a strong password** creates a random 16-character password with the browser's secure random generator and copies it for you.
+  - Show/hide buttons on every password box, and a confirm box with a match check.
+  - **Change password** in your account: you must enter your current password first.
+- **Profiles:** display name, photo (cropped to 256×256 and uploaded to Supabase Storage), bio, and the teams you follow. New users are asked to set it up after their first sign-in.
 
-## Login (Supabase)
-
-The app uses the Supabase project `exdkeaomgxdnnzbszgfs`. Its URL and publishable key are in `public/index.html` and `netlify/functions/suno.mjs`. Both are public values, not secrets. No database tables are needed: users live in Supabase's built-in `auth.users`.
-
-One-time setup in the Supabase dashboard:
-
-1. **Authentication → URL Configuration.** Set **Site URL** to your Netlify URL (for example `https://your-site.netlify.app`) and add `https://your-site.netlify.app/**` under **Redirect URLs**. Without this, the confirmation and password-reset emails link to `localhost`.
-2. **Authentication → Sign In / Providers → Email** is on by default. Leave **Confirm email** on unless you want people to sign in without confirming.
-3. Supabase's built-in email sender only allows a few emails per hour. For real use, add your own SMTP server under **Authentication → Emails → SMTP Settings**.
-
-### Database
-
-`supabase/migrations/20261005200000_profiles.sql` (already applied to the project) creates:
-
-- `public.profiles`: one row per user (`display_name`, `bio`, `avatar_url`, `favorite_genres`), created automatically at sign-up by a trigger. Row Level Security lets each user read and edit only their own row.
-- `avatars` storage bucket: public to view, max 2 MB per file, images only. Users can only upload to or delete from a folder named after their own user ID. The app crops photos to 256×256 before uploading.
-
-Each user's saved Suno key and track history are stored in the browser under their own user ID, so two people sharing a computer don't see each other's tracks.
-
-## Project layout
+## How it works
 
 ```
-public/index.html                  the whole app (HTML + CSS + JS)
-netlify/functions/suno.mjs         proxy: /api/suno/* → https://api.sunoapi.org/api/v1/* (signed-in users only)
-netlify/functions/suno-callback.mjs  acknowledges Suno's required callBackUrl
-netlify.toml                       Netlify build config
-supabase/migrations/               database schema (profiles table, avatars bucket)
+public/index.html                 page markup (login screen, app, account dialog)
+public/css/styles.css             FAU-themed styles (FAU Blue #003366, FAU Red #CC0000)
+public/js/password.js             password strength check, meter and generator
+public/js/app.js                  app logic: login, profile, ESPN data, weather, rendering
+netlify/functions/espn.mjs        proxy: /api/espn/{schedule|news}?sport=football|mbb|wbb|vb
+netlify.toml                      Netlify build config and security headers
+supabase/migrations/              database schema (profiles table, avatars bucket, favorite sports)
 ```
 
-The browser talks to `/api/suno/*`, and a Netlify Function forwards the request to the Suno API. That avoids CORS problems. The function only forwards the endpoints the app uses.
+The browser asks `/api/espn/...` for data. A Netlify Function checks that you're signed in, fetches FAU's team (ID `2226`) from ESPN's public site API, trims the response down to what the app needs, and caches it for a minute. During the preseason ESPN's default schedule is empty, so the function then asks for the regular season. Weather comes straight from Open-Meteo in the browser.
+
+## Supabase setup
+
+The app uses the Supabase project `exdkeaomgxdnnzbszgfs` (same as Suno Studio). Its URL and publishable key are in `public/js/app.js` and `netlify/functions/espn.mjs`. Both are public values, not secrets.
+
+1. **Resume the project** if it's paused (free projects pause after a week without use): Supabase dashboard → your project → **Restore project**.
+2. **Apply the new migration** `supabase/migrations/20261021200000_favorite_sports.sql` (SQL Editor → paste → Run). It adds the `favorite_sports` column to `profiles`. The profiles table and avatars bucket from `20261005200000_profiles.sql` are already there.
+3. **Authentication → URL Configuration.** Set **Site URL** to your Netlify URL (for example `https://owls-gameday.netlify.app`) and add `https://owls-gameday.netlify.app/**` under **Redirect URLs**. Without this, the confirmation and password-reset emails link to the old site or `localhost`.
+4. Optional: under **Authentication → Sign In / Providers → Email**, set the minimum password length to 8 so the server enforces the same rule as the app.
 
 ## Deploy to Netlify
 
-1. In Netlify: **Add new site → Import an existing project**, then pick this repo and the `main` branch.
+1. In Netlify: **Add new site → Import an existing project**, then pick this repo and branch.
 2. Leave the build command empty. `netlify.toml` already sets publish = `public` and functions = `netlify/functions`.
-3. Deploy, then do the one-time Supabase setup above.
-4. Open the site, create an account, confirm your email, sign in, click **🔑 API key**, and paste your key.
+3. Deploy, then do the Supabase steps above.
+4. Open the site, create an account, confirm your email, and sign in.
 
 Or with the CLI: `npx netlify-cli deploy --prod`.
-
-### Optional: a server-side key
-
-If you set a `SUNO_API_KEY` environment variable in Netlify (Site settings → Environment variables), the proxy uses it whenever a signed-in user hasn't entered their own key. **Anyone who can create an account could then spend your credits.** To keep it private, turn off **Allow new users to sign up** (Authentication → Sign In / Providers) after creating your own account, and invite people from Authentication → Users.
 
 ## Local development
 
@@ -63,4 +57,8 @@ If you set a `SUNO_API_KEY` environment variable in Netlify (Site settings → E
 npx netlify-cli dev
 ```
 
-Then open http://localhost:8888.
+Then open http://localhost:8888. (The ESPN data needs the Netlify Function, so opening `index.html` directly won't load scores.)
+
+## Credits
+
+Scores, schedules and news from ESPN. Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). This is a student project for ISM 4421 and is not an official FAU or ESPN website.

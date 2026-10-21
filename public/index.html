@@ -3,462 +3,193 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Suno Studio</title>
-<meta name="description" content="Generate AI music with the Suno API: describe a song, write lyrics, and get two full tracks.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0b0b12;
-    --panel: #14141f;
-    --panel-2: #1b1b29;
-    --border: #2a2a3d;
-    --text: #ecebf5;
-    --muted: #9a98b3;
-    --accent: #a855f7;
-    --accent-2: #ec4899;
-    --ok: #22c55e;
-    --warn: #f59e0b;
-    --err: #ef4444;
-    --radius: 14px;
-    --grad: linear-gradient(135deg, var(--accent), var(--accent-2));
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body {
-    background: radial-gradient(1200px 600px at 10% -10%, #2a1245 0%, transparent 60%),
-                radial-gradient(900px 500px at 110% 0%, #3b0f2e 0%, transparent 55%),
-                var(--bg);
-    background-attachment: fixed;
-    color: var(--text);
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    font-size: 15px;
-    line-height: 1.5;
-    min-height: 100vh;
-  }
-  a { color: #c4a1ff; }
-  button, input, select, textarea { font: inherit; color: inherit; }
-
-  /* ---------- Header ---------- */
-  header {
-    position: sticky; top: 0; z-index: 20;
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 24px;
-    background: rgba(11, 11, 18, 0.8);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-  }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -0.02em; }
-  .brand .logo {
-    width: 34px; height: 34px; border-radius: 10px; background: var(--grad);
-    display: grid; place-items: center; font-size: 18px;
-  }
-  .brand small { font-weight: 500; color: var(--muted); font-size: 12px; display: block; letter-spacing: 0; }
-  header .spacer { flex: 1; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 12px; border-radius: 999px;
-    background: var(--panel-2); border: 1px solid var(--border);
-    font-size: 13px; color: var(--muted); white-space: nowrap;
-  }
-  .pill b { color: var(--text); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .dot.ok { background: var(--ok); }
-  .dot.err { background: var(--err); }
-
-  /* ---------- Layout ---------- */
-  main {
-    max-width: 1280px; margin: 0 auto; padding: 24px;
-    display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 24px;
-    align-items: start;
-  }
-  @media (max-width: 960px) {
-    main { grid-template-columns: 1fr; padding: 16px; }
-    header { padding: 12px 16px; }
-  }
-  @media (max-width: 480px) {
-    .brand small { display: none; }
-    .brand { font-size: 16px; }
-    #settingsBtn { padding: 6px 8px; }
-  }
-  .card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 20px;
-  }
-  .card + .card { margin-top: 16px; }
-  .card h2 { margin: 0 0 4px; font-size: 17px; letter-spacing: -0.01em; }
-  .card .sub { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
-  .sticky { position: sticky; top: 86px; }
-  @media (max-width: 960px) { .sticky { position: static; } }
-
-  /* ---------- Forms ---------- */
-  label.field { display: block; margin-bottom: 14px; }
-  .field > span.lbl {
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 13px; font-weight: 600; margin-bottom: 6px;
-  }
-  .field > span.lbl em { font-style: normal; font-weight: 400; color: var(--muted); font-size: 12px; }
-  input[type=text], input[type=email], input[type=password], input[type=number], select, textarea {
-    width: 100%; padding: 10px 12px;
-    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
-    outline: none; transition: border-color .15s, box-shadow .15s;
-  }
-  textarea { resize: vertical; min-height: 90px; }
-  textarea.lyrics { min-height: 180px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(168, 85, 247, .2); }
-  .row { display: flex; gap: 10px; }
-  .row > * { flex: 1; min-width: 0; }
-  .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
-
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border);
-    background: var(--panel-2); cursor: pointer; font-weight: 600; font-size: 14px;
-    transition: transform .05s, background .15s, border-color .15s, opacity .15s;
-    white-space: nowrap; text-decoration: none; color: var(--text);
-  }
-  .btn:hover { border-color: #3d3d58; background: #22223340; }
-  .btn:active { transform: translateY(1px); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.primary { background: var(--grad); border: 0; color: white; }
-  .btn.primary:hover { filter: brightness(1.08); }
-  .btn.big { width: 100%; padding: 14px; font-size: 16px; border-radius: 12px; }
-  .btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
-  .btn.ghost { background: transparent; }
-  .btn.danger:hover { border-color: var(--err); color: #fca5a5; }
-
-  .tabs { display: flex; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
-  .tabs button {
-    flex: 1; padding: 8px; border: 0; background: transparent; border-radius: 9px; cursor: pointer;
-    font-weight: 600; color: var(--muted);
-  }
-  .tabs button.active { background: var(--grad); color: white; }
-
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .chip {
-    padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer;
-    background: transparent; border: 1px solid var(--border); color: var(--muted);
-  }
-  .chip:hover { border-color: var(--accent); color: var(--text); }
-
-  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px;
-    padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
-  .switch .t { font-weight: 600; font-size: 14px; }
-  .switch .d { color: var(--muted); font-size: 12px; }
-  .switch input { display: none; }
-  .switch .knob { width: 40px; height: 22px; border-radius: 999px; background: #33334a; position: relative; flex: none; transition: background .15s; }
-  .switch .knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: left .15s; }
-  .switch input:checked + .knob { background: var(--accent); }
-  .switch input:checked + .knob::after { left: 21px; }
-
-  .seg { display: flex; gap: 6px; }
-  .seg label { flex: 1; }
-  .seg input { display: none; }
-  .seg span { display: block; text-align: center; padding: 8px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel-2); cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
-  .seg input:checked + span { border-color: var(--accent); color: var(--text); background: rgba(168, 85, 247, .15); }
-
-  details.adv { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; }
-  details.adv summary { padding: 10px 12px; cursor: pointer; font-weight: 600; font-size: 13px; list-style: none; display: flex; justify-content: space-between; }
-  details.adv summary::after { content: "▾"; color: var(--muted); }
-  details.adv[open] summary::after { content: "▴"; }
-  details.adv .inner { padding: 4px 12px 2px; }
-  .slider { margin-bottom: 14px; }
-  .slider .top { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-  .slider .top output { color: var(--muted); font-weight: 500; }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
-
-  .hidden { display: none !important; }
-
-  /* ---------- Key card ---------- */
-  .key-row { display: flex; gap: 8px; }
-  .key-row input { flex: 1; }
-  .key-status { font-size: 13px; margin-top: 10px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
-
-  /* ---------- Lyrics helper ---------- */
-  .lyric-options { display: grid; gap: 8px; margin-top: 10px; }
-  .lyric-opt { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
-  .lyric-opt pre { margin: 6px 0 8px; white-space: pre-wrap; font-size: 12px; max-height: 140px; overflow: auto; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
-
-  /* ---------- Library ---------- */
-  .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .lib-head h2 { margin: 0; font-size: 20px; }
-  .empty { text-align: center; padding: 60px 20px; color: var(--muted); border: 1px dashed var(--border); border-radius: var(--radius); }
-  .empty .big { font-size: 44px; margin-bottom: 8px; }
-
-  .task { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
-  .task-head { display: flex; align-items: flex-start; gap: 12px; }
-  .task-head .info { flex: 1; min-width: 0; }
-  .task-head .prompt { font-weight: 600; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .task-head .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
-  .badge.run { background: rgba(168, 85, 247, .18); color: #d8b4fe; }
-  .badge.ok { background: rgba(34, 197, 94, .15); color: #86efac; }
-  .badge.err { background: rgba(239, 68, 68, .15); color: #fca5a5; }
-  .progress { height: 4px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin-top: 12px; }
-  .progress i { display: block; height: 100%; width: 40%; background: var(--grad); animation: slide 1.4s infinite ease-in-out; }
-  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
-  .task .error { color: #fca5a5; font-size: 13px; margin-top: 10px; }
-
-  .tracks { display: grid; gap: 12px; margin-top: 14px; }
-  .track { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
-  .cover { width: 96px; height: 96px; border-radius: 10px; object-fit: cover; background: var(--grad); display: grid; place-items: center; font-size: 32px; }
-  .track .t-title { font-weight: 700; font-size: 15px; }
-  .track .t-tags { color: var(--muted); font-size: 12px; margin: 2px 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .track audio { width: 100%; height: 36px; }
-  .track .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .track pre.lyr { grid-column: 1 / -1; margin: 0; white-space: pre-wrap; font-size: 12px; font-family: ui-monospace, Menlo, monospace; color: var(--muted); background: var(--panel); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; }
-  .streaming { font-size: 11px; color: var(--warn); font-weight: 600; }
-  @media (max-width: 520px) {
-    .track { grid-template-columns: 64px minmax(0, 1fr); }
-    .cover { width: 64px; height: 64px; font-size: 24px; }
-  }
-
-  /* ---------- Modal ---------- */
-  .modal-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, .6); display: grid; place-items: center; z-index: 50; padding: 16px; }
-  .modal { width: 100%; max-width: 480px; max-height: 90vh; overflow: auto; }
-
-  /* ---------- Toasts ---------- */
-  #toasts { position: fixed; bottom: 20px; right: 20px; display: grid; gap: 8px; z-index: 60; max-width: calc(100vw - 40px); }
-  .toast { background: var(--panel-2); border: 1px solid var(--border); border-left: 4px solid var(--accent); padding: 10px 14px; border-radius: 10px; font-size: 14px; max-width: 380px; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: pop .2s ease-out; }
-  .toast.err { border-left-color: var(--err); }
-  .toast.ok { border-left-color: var(--ok); }
-  @keyframes pop { from { transform: translateY(8px); opacity: 0; } }
-
-  /* ---------- Login ---------- */
-  body:not(.authed) > header, body:not(.authed) > main, body:not(.authed) > footer { display: none; }
-  body.authed #authScreen { display: none; }
-  #authScreen { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
-  .auth-box { width: 100%; max-width: 400px; }
-  .auth-box .brand { justify-content: center; margin-bottom: 20px; }
-  .auth-box form { display: grid; }
-  .auth-msg { font-size: 13px; padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; border: 1px solid var(--border); background: var(--panel-2); }
-  .auth-msg.err { border-color: rgba(239, 68, 68, .5); color: #fca5a5; }
-  .auth-msg.ok { border-color: rgba(34, 197, 94, .5); color: #86efac; }
-  .auth-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; font-size: 13px; flex-wrap: wrap; }
-  .auth-links button { background: none; border: 0; padding: 0; color: #c4a1ff; cursor: pointer; text-decoration: underline; }
-  .auth-loading { color: var(--muted); display: flex; align-items: center; gap: 10px; }
-
-  /* ---------- Profile ---------- */
-  .avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; object-fit: cover; background: var(--grad);
-    display: inline-grid; place-items: center; font-weight: 700; font-size: 13px; color: white; overflow: hidden; }
-  .avatar.lg { width: 84px; height: 84px; font-size: 32px; }
-  #profileBtn { padding: 4px 12px 4px 4px; border-radius: 999px; gap: 8px; }
-  #profileName { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
-  @media (max-width: 640px) { #profileName { display: none; } #profileBtn { padding: 4px; } }
-  .avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
-  .avatar-row .btns { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip.on { border-color: var(--accent); color: var(--text); background: rgba(168, 85, 247, .18); }
-  .chip.fav { border-color: rgba(168, 85, 247, .5); color: var(--text); }
-
-  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px 16px 40px; }
-  .spin { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: rot .7s linear infinite; }
-  @keyframes rot { to { transform: rotate(360deg); } }
-</style>
+<title>Owls Gameday | FAU Athletics</title>
+<meta name="description" content="Florida Atlantic Owls scores, schedules, news and game-day weather in one place.">
+<meta name="theme-color" content="#003366">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦉</text></svg>">
+<link rel="preconnect" href="https://api.open-meteo.com">
+<link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
-<!-- Login screen: shown until the visitor signs in -->
+<!-- ================= Login screen: shown until the visitor signs in ================= -->
 <div id="authScreen">
   <div class="auth-box">
-    <div class="brand">
-      <div class="logo">🎵</div>
-      <div>Suno Studio<small>AI music generator</small></div>
+    <div class="auth-brand">
+      <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/ncaa/500/2226.png" alt="" width="64" height="64">
+      <div>
+        <div class="auth-title">Owls Gameday</div>
+        <div class="muted">FAU scores, schedules &amp; news</div>
+      </div>
     </div>
     <div class="card">
       <div class="auth-loading" id="authLoading"><span class="spin"></span> Loading…</div>
       <div id="authPanel" class="hidden">
         <h2 id="authTitle">Sign in</h2>
         <p class="sub" id="authSub">Use your email and password.</p>
-        <div class="auth-msg hidden" id="authMsg" role="status"></div>
+        <div class="msg hidden" id="authMsg" role="status"></div>
         <form id="authForm" novalidate>
           <label class="field" id="authEmailWrap">
             <span class="lbl">Email</span>
-            <input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com" required>
+            <input type="email" id="authEmail" autocomplete="email" placeholder="you@fau.edu" required>
           </label>
-          <label class="field" id="authPassWrap">
-            <span class="lbl">Password <em id="authPassHint"></em></span>
-            <input type="password" id="authPass" autocomplete="current-password" minlength="6" required>
-          </label>
+          <div class="field" id="authPassWrap">
+            <label class="lbl" for="authPass">Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="authPass" autocomplete="current-password" required>
+              <button type="button" class="pw-toggle" data-toggle-pw="authPass" aria-label="Show password">Show</button>
+            </div>
+          </div>
+          <!-- New-password helpers: sign up and reset only -->
+          <div id="authNewPw" class="hidden">
+            <div class="pw-meter" id="authMeter"></div>
+            <button type="button" class="link-btn" id="authGenerate">🔐 Suggest a strong password</button>
+            <div class="field" style="margin-top:12px">
+              <label class="lbl" for="authPass2">Confirm password</label>
+              <div class="pw-wrap">
+                <input type="password" id="authPass2" autocomplete="new-password">
+                <button type="button" class="pw-toggle" data-toggle-pw="authPass2" aria-label="Show password">Show</button>
+              </div>
+              <div class="hint" id="authMatch"></div>
+            </div>
+          </div>
           <button class="btn primary big" type="submit" id="authSubmit">Sign in</button>
         </form>
         <div class="auth-links">
-          <button type="button" data-auth-view="signup" id="toSignup">Create an account</button>
-          <button type="button" data-auth-view="signin" id="toSignin" class="hidden">I already have an account</button>
-          <button type="button" data-auth-view="forgot" id="toForgot">Forgot password?</button>
+          <button type="button" class="link-btn" data-auth-view="signup" id="toSignup">Create an account</button>
+          <button type="button" class="link-btn hidden" data-auth-view="signin" id="toSignin">I already have an account</button>
+          <button type="button" class="link-btn" data-auth-view="forgot" id="toForgot">Forgot password?</button>
         </div>
       </div>
     </div>
+    <p class="fine">Student project for ISM 4421. Not an official FAU website.</p>
   </div>
 </div>
 
-<header>
-  <div class="brand">
-    <div class="logo">🎵</div>
-    <div>Suno Studio<small>AI music generator</small></div>
+<!-- ================= App ================= -->
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="#home" aria-label="Owls Gameday home">
+      <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/ncaa/500/2226.png" alt="" width="44" height="44">
+      <span>
+        <span class="brand-title">Owls Gameday</span>
+        <span class="brand-sub">Go Owls!</span>
+      </span>
+    </a>
+    <div class="header-right">
+      <span class="wx-pill hidden" id="campusWx" title="Weather on FAU's Boca Raton campus"></span>
+      <div class="unit-toggle" role="group" aria-label="Temperature units">
+        <button type="button" data-unit="fahrenheit" aria-pressed="true">°F</button>
+        <button type="button" data-unit="celsius" aria-pressed="false">°C</button>
+      </div>
+      <button class="profile-btn" id="profileBtn" type="button" title="Your account">
+        <span class="avatar" id="headerAvatar"></span><span id="profileName">Account</span>
+      </button>
+    </div>
   </div>
-  <div class="spacer"></div>
-  <span class="pill" id="creditsPill" title="Remaining API credits"><span class="dot" id="keyDot"></span><span id="creditsText">No API key</span></span>
-  <button class="btn sm" id="settingsBtn" type="button">🔑 API key</button>
-  <button class="btn sm" id="profileBtn" type="button" title="Your profile"><span class="avatar" id="headerAvatar"></span><span id="profileName">Profile</span></button>
-  <button class="btn sm" id="signOutBtn" type="button">Sign out</button>
+  <nav class="tabs container" aria-label="Sections">
+    <a href="#home" data-tab="home">🏠 Home</a>
+    <a href="#football" data-tab="football">🏈 Football</a>
+    <a href="#mbb" data-tab="mbb">🏀 Men's Hoops</a>
+    <a href="#wbb" data-tab="wbb">🏀 Women's Hoops</a>
+    <a href="#vb" data-tab="vb">🏐 Volleyball</a>
+    <a href="#news" data-tab="news">📰 News</a>
+  </nav>
 </header>
 
-<main>
-  <!-- ================= LEFT: create ================= -->
-  <section>
-    <div class="card" id="keyCard">
-      <h2>🔑 Your Suno API key</h2>
-      <p class="sub">Get a key from <a href="https://sunoapi.org/api-key" target="_blank" rel="noopener">sunoapi.org/api-key</a>. It's saved only in this browser.</p>
-      <div class="key-row">
-        <input type="password" id="apiKey" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
-        <button class="btn sm ghost" id="toggleKey" type="button" title="Show/hide">👁</button>
+<main class="container">
+  <!-- Home -->
+  <section data-view="home">
+    <div class="welcome">
+      <div>
+        <h1 id="greeting">Go Owls!</h1>
+        <p class="muted" id="greetingSub">Here's what's happening with your teams.</p>
       </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="saveKey" type="button">Save &amp; test key</button>
-        <button class="btn danger" id="clearKey" type="button">Remove</button>
-      </div>
-      <div class="key-status" id="keyStatus"></div>
     </div>
 
-    <div class="card sticky" id="createCard">
-      <div class="tabs" role="tablist">
-        <button type="button" class="active" data-mode="simple">✨ Simple</button>
-        <button type="button" data-mode="custom">🎛️ Custom</button>
+    <div id="nextGame"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2 class="section-title">📅 Coming up</h2>
+        <ol class="game-list compact" id="upcomingList"></ol>
       </div>
+      <div class="card">
+        <h2 class="section-title">🏁 Latest results</h2>
+        <ol class="game-list compact" id="resultsList"></ol>
+      </div>
+    </div>
 
-      <form id="genForm" autocomplete="off">
-        <!-- Simple mode -->
-        <div data-show="simple">
-          <label class="field">
-            <span class="lbl">Describe your song <em><span id="promptCount">0</span>/3000</em></span>
-            <textarea id="prompt" maxlength="3000" placeholder="An upbeat summer pop song about a road trip with friends, catchy chorus, female vocals"></textarea>
-          </label>
-          <div class="chips" id="ideaChips" style="margin:-6px 0 14px"></div>
-        </div>
+    <h2 class="section-title out">Team records</h2>
+    <div class="team-grid" id="teamGrid"></div>
 
-        <!-- Custom mode -->
-        <div data-show="custom" class="hidden">
-          <label class="field">
-            <span class="lbl">Title <em><span id="titleCount">0</span>/80</em></span>
-            <input type="text" id="title" maxlength="80" placeholder="Midnight Drive">
-          </label>
-        </div>
-
-        <label class="field">
-          <span class="lbl">Style of music <em data-show="simple">optional</em></span>
-          <input type="text" id="style" maxlength="1000" placeholder="synthwave, dreamy, 80s, female vocals">
-          <div class="chips" id="styleChips"></div>
-        </label>
-
-        <label class="switch">
-          <div><div class="t">Instrumental</div><div class="d">No vocals, music only</div></div>
-          <input type="checkbox" id="instrumental"><span class="knob"></span>
-        </label>
-
-        <div data-show="custom" class="hidden">
-          <div id="lyricsBlock">
-            <label class="field">
-              <span class="lbl">Lyrics <em><span id="lyricsCount">0</span>/5000</em></span>
-              <textarea id="lyrics" class="lyrics" maxlength="5000" placeholder="[Verse]&#10;Streetlights humming on the highway&#10;&#10;[Chorus]&#10;We're driving into the night..."></textarea>
-            </label>
-            <details class="adv" id="lyricsHelper">
-              <summary>✍️ Write lyrics with AI</summary>
-              <div class="inner">
-                <label class="field">
-                  <span class="lbl">What should the song be about? <em><span id="lpCount">0</span>/200</em></span>
-                  <input type="text" id="lyricsPrompt" maxlength="200" placeholder="Falling in love on a rainy night in Tokyo">
-                </label>
-                <button class="btn" type="button" id="genLyricsBtn" style="width:100%">Generate lyrics</button>
-                <div class="lyric-options" id="lyricOptions"></div>
-                <div style="height:12px"></div>
-              </div>
-            </details>
-            <div class="field">
-              <span class="lbl">Vocal preference</span>
-              <div class="seg">
-                <label><input type="radio" name="vocal" value="" checked><span>Any</span></label>
-                <label><input type="radio" name="vocal" value="m"><span>Male</span></label>
-                <label><input type="radio" name="vocal" value="f"><span>Female</span></label>
-              </div>
-            </div>
-          </div>
-
-          <details class="adv">
-            <summary>⚙️ Advanced options</summary>
-            <div class="inner">
-              <label class="field">
-                <span class="lbl">Exclude styles <em>negative tags</em></span>
-                <input type="text" id="negativeTags" maxlength="1000" placeholder="heavy metal, screaming, autotune">
-              </label>
-              <label class="field">
-                <span class="lbl">Duration (seconds) <em>optional, 10–360</em></span>
-                <input type="number" id="duration" min="10" max="360" step="1" placeholder="Let the model decide">
-              </label>
-              <label class="switch" style="margin-bottom:10px">
-                <div><div class="t">Fine-tune sliders</div><div class="d">Send the values below with the request</div></div>
-                <input type="checkbox" id="useSliders"><span class="knob"></span>
-              </label>
-              <div id="sliders">
-                <div class="slider"><div class="top"><span>Style adherence</span><output id="styleWeightOut">0.65</output></div>
-                  <input type="range" id="styleWeight" min="0" max="1" step="0.01" value="0.65"></div>
-                <div class="slider"><div class="top"><span>Weirdness / creativity</span><output id="weirdnessOut">0.50</output></div>
-                  <input type="range" id="weirdness" min="0" max="1" step="0.01" value="0.5"></div>
-                <div class="slider" id="audioWeightWrap"><div class="top"><span>Audio weight</span><output id="audioWeightOut">0.65</output></div>
-                  <input type="range" id="audioWeight" min="0" max="1" step="0.01" value="0.65"></div>
-              </div>
-              <label class="field">
-                <span class="lbl">Variety</span>
-                <select id="variety">
-                  <option value="0">0 · Off (exact style)</option>
-                  <option value="1" selected>1 · Normal (balanced)</option>
-                  <option value="2">2 · High (distinct styles)</option>
-                  <option value="3">3 · Extra (bold)</option>
-                  <option value="4">4 · Max (wild)</option>
-                </select>
-              </label>
-            </div>
-          </details>
-        </div>
-
-        <label class="field">
-          <span class="lbl">Model</span>
-          <select id="model">
-            <option value="V6" selected>V6 · Best quality, natural vocals (recommended)</option>
-            <option value="V6_WILD">V6 Wild · Bolder, more experimental</option>
-            <option value="V6_MINI">V6 Mini · Fastest</option>
-          </select>
-        </label>
-
-        <button class="btn primary big" type="submit" id="genBtn">🎶 Generate music</button>
-        <p class="hint" style="text-align:center">Each request creates 2 variations. Takes about 1–3 minutes.</p>
-      </form>
+    <div class="card">
+      <div class="card-head">
+        <h2 class="section-title">📰 Latest news</h2>
+        <a href="#news" class="btn sm ghost">All news</a>
+      </div>
+      <div class="news-grid" id="homeNews"></div>
     </div>
   </section>
 
-  <!-- ================= RIGHT: library ================= -->
-  <section>
-    <div class="lib-head">
-      <h2>Your tracks</h2>
-      <button class="btn sm danger" id="clearLib" type="button">Clear history</button>
+  <!-- One sport (football, men's/women's basketball, volleyball) -->
+  <section data-view="sport" class="hidden">
+    <div class="sport-head card">
+      <div>
+        <h1 id="sportTitle"></h1>
+        <p class="muted" id="sportMeta"></p>
+      </div>
+      <div class="sport-stats" id="sportStats"></div>
     </div>
-    <div id="library"></div>
+    <div class="filters" role="group" aria-label="Filter games">
+      <button type="button" data-filter="all" class="on">All</button>
+      <button type="button" data-filter="upcoming">Upcoming</button>
+      <button type="button" data-filter="results">Results</button>
+      <button type="button" data-filter="home">Home</button>
+      <button type="button" data-filter="away">Away</button>
+    </div>
+    <div class="card">
+      <ol class="game-list" id="sportGames"></ol>
+    </div>
+    <div class="card">
+      <h2 class="section-title">📰 News</h2>
+      <div class="news-grid" id="sportNews"></div>
+    </div>
+  </section>
+
+  <!-- All news -->
+  <section data-view="news" class="hidden">
+    <h1>FAU Athletics News</h1>
+    <div class="news-grid" id="allNews"></div>
   </section>
 </main>
 
-<footer>Powered by the <a href="https://docs.sunoapi.org" target="_blank" rel="noopener">Suno API</a>. Generated files are kept by the API for about 14 days, so download what you want to keep.</footer>
+<footer class="site-footer">
+  <div class="container">
+    Scores and schedules from ESPN. Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).
+    Built for ISM 4421 at Florida Atlantic University. Not an official FAU website.
+  </div>
+</footer>
 
-<!-- Profile modal -->
-<div class="modal-bg hidden" id="profileModal">
-  <div class="card modal">
-    <h2 id="profileTitle">Your profile</h2>
-    <p class="sub" id="profileSub">This is how you appear in Suno Studio.</p>
-    <form id="profileForm" autocomplete="off">
+<!-- ================= Account modal: profile + change password ================= -->
+<div class="modal-bg hidden" id="accountModal">
+  <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+    <div class="card-head">
+      <h2 id="accountTitle">Your account</h2>
+      <button class="btn sm ghost" type="button" id="accountClose" aria-label="Close">✕</button>
+    </div>
+    <p class="sub" id="accountSub">Your profile and sign-in settings.</p>
+
+    <div class="modal-tabs" role="tablist">
+      <button type="button" class="on" data-acct-tab="profile">👤 Profile</button>
+      <button type="button" data-acct-tab="password">🔒 Password</button>
+    </div>
+
+    <form id="profileForm" data-acct-pane="profile" autocomplete="off">
       <div class="avatar-row">
         <span class="avatar lg" id="pfAvatar"></span>
         <div>
-          <div class="btns">
+          <div class="btn-row">
             <label class="btn sm" for="pfFile">📷 Upload photo</label>
             <button class="btn sm danger" type="button" id="pfRemovePhoto">Remove</button>
           </div>
@@ -476,1000 +207,58 @@
       </label>
       <label class="field">
         <span class="lbl">About you <em><span id="pfBioCount">0</span>/300</em></span>
-        <textarea id="pfBio" maxlength="300" style="min-height:70px" placeholder="Bedroom producer, lo-fi lover, aspiring songwriter…"></textarea>
+        <textarea id="pfBio" maxlength="300" rows="3" placeholder="Class of '27, section 112 regular, never miss a home game…"></textarea>
       </label>
       <div class="field">
-        <span class="lbl">Favorite genres <em>up to 10, shown first in the style picker</em></span>
-        <div class="chips" id="pfGenres" style="margin-top:0"></div>
+        <span class="lbl">Teams you follow <em>shown first on your home page</em></span>
+        <div class="chips" id="pfSports"></div>
       </div>
-      <div class="row" style="margin-top:6px">
+      <div class="btn-row end">
         <button class="btn" type="button" id="pfCancel">Cancel</button>
         <button class="btn primary" type="submit" id="pfSave">Save profile</button>
       </div>
     </form>
-  </div>
-</div>
 
-<!-- Extend modal -->
-<div class="modal-bg hidden" id="extendModal">
-  <div class="card modal">
-    <h2>⏩ Extend track</h2>
-    <p class="sub" id="extendSub">Continue this song from a chosen point.</p>
-    <form id="extendForm">
-      <label class="field">
-        <span class="lbl">Continue from (seconds)</span>
-        <input type="number" id="exContinue" min="0" step="1" required>
-      </label>
-      <label class="field">
-        <span class="lbl">Title</span>
-        <input type="text" id="exTitle" maxlength="100">
-      </label>
-      <label class="field">
-        <span class="lbl">Style</span>
-        <input type="text" id="exStyle" maxlength="1000">
-      </label>
-      <label class="field" id="exLyricsWrap">
-        <span class="lbl">Lyrics for the new section <em>optional</em></span>
-        <textarea id="exLyrics" class="lyrics" maxlength="5000" style="min-height:120px" placeholder="[Bridge]&#10;..."></textarea>
-      </label>
-      <div class="row">
-        <button class="btn" type="button" id="exCancel">Cancel</button>
-        <button class="btn primary" type="submit" id="exSubmit">Extend</button>
+    <form id="passwordForm" data-acct-pane="password" class="hidden" autocomplete="off">
+      <div class="msg hidden" id="pwMsg" role="status"></div>
+      <div class="field">
+        <label class="lbl" for="pwCurrent">Current password</label>
+        <div class="pw-wrap">
+          <input type="password" id="pwCurrent" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" data-toggle-pw="pwCurrent" aria-label="Show password">Show</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="pwNew">New password</label>
+        <div class="pw-wrap">
+          <input type="password" id="pwNew" autocomplete="new-password" required>
+          <button type="button" class="pw-toggle" data-toggle-pw="pwNew" aria-label="Show password">Show</button>
+        </div>
+        <div class="pw-meter" id="pwMeter"></div>
+        <button type="button" class="link-btn" id="pwGenerate">🔐 Suggest a strong password</button>
+      </div>
+      <div class="field">
+        <label class="lbl" for="pwNew2">Confirm new password</label>
+        <div class="pw-wrap">
+          <input type="password" id="pwNew2" autocomplete="new-password" required>
+          <button type="button" class="pw-toggle" data-toggle-pw="pwNew2" aria-label="Show password">Show</button>
+        </div>
+        <div class="hint" id="pwMatch"></div>
+      </div>
+      <div class="btn-row end">
+        <button class="btn primary" type="submit" id="pwSave">Change password</button>
       </div>
     </form>
+
+    <hr>
+    <button class="btn danger" type="button" id="signOutBtn">Sign out</button>
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-<script>
-(() => {
-  "use strict";
-
-  // ---------------------------------------------------------------------------
-  // Config
-  // ---------------------------------------------------------------------------
-  // On Netlify, calls go through /api/suno/* (a Netlify Function that forwards to
-  // the Suno API). Opening the file directly falls back to calling the API itself.
-  const API_BASE = location.protocol === "file:" ? "https://api.sunoapi.org/api/v1" : "/api/suno";
-  const CALLBACK_URL = location.protocol === "https:"
-    ? `${location.origin}/api/suno-callback`
-    : "https://example.com/suno-callback";
-  const POLL_MS = 8000;
-  const LYRICS_POLL_MS = 4000;
-  const MAX_POLL_MS = 15 * 60 * 1000;
-  // Supabase project used for email login. Both values are public by design
-  // (the publishable key only allows what your auth settings and RLS allow).
-  const SUPABASE_URL = "https://exdkeaomgxdnnzbszgfs.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_QJaN40fHQHOy6P7ylV78GA_i-BuWuue";
-  // Saved key and history are kept per signed-in user (set in startApp).
-  let LS_KEY = "suno.apiKey";
-  let LS_LIB = "suno.library.v1";
-
-  const FAIL_STATES = new Set([
-    "CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION",
-    "SENSITIVE_WORD_ERROR", "FAILED", "TIMEOUT",
-  ]);
-  const STATUS_LABEL = {
-    PENDING: "Queued",
-    GENERATING: "Generating",
-    TEXT_SUCCESS: "Writing lyrics done",
-    FIRST_SUCCESS: "First track ready",
-    SUCCESS: "Complete",
-    CREATE_TASK_FAILED: "Failed to start",
-    GENERATE_AUDIO_FAILED: "Generation failed",
-    CALLBACK_EXCEPTION: "Callback error",
-    SENSITIVE_WORD_ERROR: "Blocked content",
-    TIMEOUT: "Timed out",
-  };
-  const CODE_MSG = {
-    400: "Invalid parameters",
-    401: "Unauthorized. Check your API key",
-    404: "Endpoint not found",
-    405: "Rate limit exceeded",
-    413: "Prompt or lyrics too long",
-    429: "Insufficient credits",
-    430: "Too many requests. Wait a moment and try again",
-    455: "Suno API is under maintenance",
-    500: "Suno server error",
-  };
-
-  const IDEAS = [
-    "Lo-fi hip hop beat for studying on a rainy afternoon",
-    "Epic orchestral trailer music with choir and big drums",
-    "Upbeat country song about a Friday night in a small town",
-    "Dreamy synthwave track about driving through neon city lights",
-    "Acoustic folk ballad about missing home, soft male vocals",
-  ];
-  const STYLES = ["Pop", "Hip Hop", "Lo-fi", "Rock", "EDM", "R&B", "Jazz", "Country", "Synthwave", "Acoustic", "Orchestral", "Reggaeton", "K-pop", "Metal"];
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//i.test(u) ? u : "");
-  const fmtTime = (sec) => {
-    if (!sec && sec !== 0) return "";
-    const s = Math.round(sec);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  };
-  const ago = (ts) => {
-    const d = (Date.now() - ts) / 1000;
-    if (d < 60) return "just now";
-    if (d < 3600) return `${Math.floor(d / 60)} min ago`;
-    if (d < 86400) return `${Math.floor(d / 3600)} h ago`;
-    return new Date(ts).toLocaleDateString();
-  };
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  function toast(msg, kind = "") {
-    const el = document.createElement("div");
-    el.className = `toast ${kind}`;
-    el.textContent = msg;
-    $("#toasts").appendChild(el);
-    setTimeout(() => el.remove(), kind === "err" ? 7000 : 4000);
-  }
-
-  const getKey = () => { try { return localStorage.getItem(LS_KEY) || ""; } catch { return ""; } };
-  const setKey = (k) => { try { k ? localStorage.setItem(LS_KEY, k) : localStorage.removeItem(LS_KEY); } catch {} };
-
-  // ---------------------------------------------------------------------------
-  // API
-  // ---------------------------------------------------------------------------
-  async function api(path, { method = "GET", body, query } = {}) {
-    const key = getKey();
-    const qs = query ? `?${new URLSearchParams(query)}` : "";
-    const headers = { "Content-Type": "application/json" };
-    if (key) headers.Authorization = `Bearer ${key}`;
-    // The Netlify proxy only serves signed-in users.
-    const token = await getAccessToken();
-    if (token && API_BASE.startsWith("/")) headers["X-User-Token"] = token;
-    let res;
-    try {
-      res = await fetch(`${API_BASE}/${path}${qs}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
-    } catch (e) {
-      throw new Error("Network error. Could not reach the API.");
-    }
-    let data;
-    try { data = await res.json(); } catch { data = null; }
-    if (data?.authError) {
-      sessionLost();
-      const err = new Error(data.msg || "Please sign in again.");
-      err.code = "AUTH";
-      throw err;
-    }
-    const code = data?.code ?? res.status;
-    if (!res.ok || code !== 200) {
-      const friendly = CODE_MSG[code];
-      const detail = data?.msg && data.msg !== "success" ? data.msg : "";
-      const err = new Error(friendly && detail ? `${friendly}: ${detail}` : friendly || detail || `Request failed (${code})`);
-      err.code = code;
-      throw err;
-    }
-    return data.data;
-  }
-
-  // Normalize track objects (the API has used both snake_case and camelCase).
-  function normTrack(t) {
-    return {
-      id: t.id,
-      title: t.title || "Untitled",
-      tags: t.tags || "",
-      duration: t.duration,
-      audio: safeUrl(t.audio_url || t.audioUrl || t.source_audio_url || t.sourceAudioUrl),
-      stream: safeUrl(t.stream_audio_url || t.streamAudioUrl || t.source_stream_audio_url || t.sourceStreamAudioUrl),
-      image: safeUrl(t.image_url || t.imageUrl || t.source_image_url || t.sourceImageUrl),
-      lyrics: t.prompt || "",
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Library (persisted in localStorage)
-  // ---------------------------------------------------------------------------
-  let library = [];
-  let currentUser = null;
-  let profile = null; // row from public.profiles
-  let profileLoaded = false;
-  const saveLib = () => { try { localStorage.setItem(LS_LIB, JSON.stringify(library.slice(0, 100))); } catch {} };
-  const findTask = (id) => library.find((t) => t.taskId === id);
-  const isDone = (t) => t.status === "SUCCESS" || FAIL_STATES.has(t.status);
-
-  function renderLibrary() {
-    const root = $("#library");
-    $("#clearLib").classList.toggle("hidden", library.length === 0);
-    if (!library.length) {
-      root.innerHTML = `<div class="empty"><div class="big">🎧</div><div><b>No tracks yet</b></div><div>Describe a song on the left and hit Generate.</div></div>`;
-      return;
-    }
-    // Keep playing audio elements alive across re-renders.
-    const playing = $$("audio", root).filter((a) => !a.paused);
-    root.innerHTML = library.map(renderTask).join("");
-    playing.forEach((a) => {
-      const slot = root.querySelector(`audio[data-track="${CSS.escape(a.dataset.track)}"]`);
-      if (slot && slot.src === a.src) slot.replaceWith(a);
-    });
-  }
-
-  function renderTask(t) {
-    const failed = FAIL_STATES.has(t.status);
-    const done = t.status === "SUCCESS";
-    const badge = failed ? "err" : done ? "ok" : "run";
-    const label = STATUS_LABEL[t.status] || t.status || "Queued";
-    const kind = t.kind === "extend" ? "⏩ Extension · " : t.mode === "custom" ? "🎛️ Custom · " : "✨ Simple · ";
-    const headline = t.title || t.prompt || t.style || "Untitled";
-    return `
-      <article class="task" data-task="${esc(t.taskId)}">
-        <div class="task-head">
-          <div class="info">
-            <div class="prompt">${esc(headline)}</div>
-            <div class="meta">${kind}${esc(t.model || "")}${t.style ? " · " + esc(t.style) : ""} · ${ago(t.createdAt)}</div>
-          </div>
-          <span class="badge ${badge}">${esc(label)}</span>
-          <button class="btn sm ghost danger" data-act="remove" title="Remove from history">✕</button>
-        </div>
-        ${!isDone(t) ? `<div class="progress"><i></i></div>` : ""}
-        ${failed ? `<div class="error">${esc(t.error || "Generation failed.")} ${t.status === "TIMEOUT" ? `<button class="btn sm" data-act="retry-poll">Check again</button>` : ""}</div>` : ""}
-        ${t.tracks?.length ? `<div class="tracks">${t.tracks.map((tr) => renderTrack(t, tr)).join("")}</div>` : ""}
-      </article>`;
-  }
-
-  function renderTrack(task, tr) {
-    const src = tr.audio || tr.stream;
-    const streamingOnly = !tr.audio && tr.stream;
-    const fname = `${(tr.title || "track").replace(/[^\w\- ]+/g, "").trim() || "track"}.mp3`;
-    return `
-      <div class="track" data-track-id="${esc(tr.id)}">
-        ${tr.image ? `<img class="cover" src="${esc(tr.image)}" alt="" loading="lazy">` : `<div class="cover">🎵</div>`}
-        <div style="min-width:0">
-          <div class="t-title">${esc(tr.title)} ${tr.duration ? `<span style="color:var(--muted);font-weight:500;font-size:12px">· ${fmtTime(tr.duration)}</span>` : ""}</div>
-          <div class="t-tags" title="${esc(tr.tags)}">${esc(tr.tags) || "&nbsp;"}</div>
-          ${src ? `<audio controls preload="none" src="${esc(src)}" data-track="${esc(tr.id)}"></audio>` : `<div class="hint">Audio is on its way…</div>`}
-          ${streamingOnly ? `<div class="streaming">● Streaming preview, full-quality file still rendering</div>` : ""}
-          <div class="actions">
-            ${tr.audio ? `<a class="btn sm" href="${esc(tr.audio)}" download="${esc(fname)}" target="_blank" rel="noopener">⬇ Download</a>` : ""}
-            ${tr.lyrics ? `<button class="btn sm" data-act="lyrics">📝 Lyrics</button>` : ""}
-            ${tr.audio && tr.id ? `<button class="btn sm" data-act="extend">⏩ Extend</button>` : ""}
-            ${tr.audio ? `<button class="btn sm" data-act="copy">🔗 Copy link</button>` : ""}
-          </div>
-        </div>
-        <pre class="lyr hidden">${esc(tr.lyrics)}</pre>
-      </div>`;
-  }
-
-  $("#library").addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-act]");
-    if (!btn) return;
-    const taskEl = btn.closest("[data-task]");
-    const task = findTask(taskEl?.dataset.task);
-    if (!task) return;
-    const trackEl = btn.closest("[data-track-id]");
-    const track = trackEl && task.tracks?.find((x) => String(x.id) === trackEl.dataset.trackId);
-    switch (btn.dataset.act) {
-      case "remove":
-        library = library.filter((t) => t !== task);
-        saveLib(); renderLibrary();
-        break;
-      case "retry-poll":
-        task.status = "PENDING"; task.error = ""; task.pollStart = Date.now();
-        saveLib(); renderLibrary(); pollTask(task.taskId);
-        break;
-      case "lyrics":
-        trackEl.querySelector("pre.lyr").classList.toggle("hidden");
-        break;
-      case "copy":
-        try { await navigator.clipboard.writeText(track.audio); toast("Link copied", "ok"); }
-        catch { toast("Could not copy link", "err"); }
-        break;
-      case "extend":
-        openExtend(task, track);
-        break;
-    }
-  });
-
-  $("#clearLib").addEventListener("click", () => {
-    if (!confirm("Remove all tracks from your history? (Files on Suno's servers are not affected.)")) return;
-    library = []; saveLib(); renderLibrary();
-  });
-
-  // ---------------------------------------------------------------------------
-  // Polling
-  // ---------------------------------------------------------------------------
-  const polling = new Set();
-
-  async function pollTask(taskId) {
-    if (polling.has(taskId)) return;
-    polling.add(taskId);
-    try {
-      while (true) {
-        const task = findTask(taskId);
-        if (!task || isDone(task)) break;
-        if (Date.now() - (task.pollStart || task.createdAt) > MAX_POLL_MS) {
-          task.status = "TIMEOUT";
-          task.error = "Still not finished after 15 minutes.";
-          saveLib(); renderLibrary();
-          break;
-        }
-        try {
-          const info = await api("generate/record-info", { query: { taskId } });
-          const resp = info?.response || {};
-          const raw = resp.sunoData || resp.data || [];
-          const status = info?.status || task.status;
-          const changed = status !== task.status || raw.length !== (task.tracks?.length || 0) ||
-            JSON.stringify(raw.map((r) => r.audio_url || r.audioUrl)) !== JSON.stringify((task.tracks || []).map((r) => r.audio));
-          task.status = status;
-          if (raw.length) task.tracks = raw.map(normTrack);
-          if (FAIL_STATES.has(status)) task.error = info?.errorMessage || STATUS_LABEL[status];
-          if (changed) {
-            saveLib(); renderLibrary();
-            if (status === "SUCCESS") toast(`🎉 "${task.tracks?.[0]?.title || "Your song"}" is ready!`, "ok");
-            if (FAIL_STATES.has(status)) toast(`Generation failed: ${task.error}`, "err");
-          }
-        } catch (err) {
-          if (err.code === "AUTH") break;
-          if (err.code === 401) {
-            task.status = "CREATE_TASK_FAILED"; task.error = err.message;
-            saveLib(); renderLibrary(); break;
-          }
-          // Transient errors: keep polling.
-        }
-        await sleep(POLL_MS);
-      }
-    } finally {
-      polling.delete(taskId);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Credits / key
-  // ---------------------------------------------------------------------------
-  async function refreshCredits({ quiet = true } = {}) {
-    const dot = $("#keyDot"), txt = $("#creditsText"), status = $("#keyStatus");
-    if (!getKey() && location.protocol === "file:") {
-      dot.className = "dot"; txt.textContent = "No API key"; status.textContent = "";
-      return false;
-    }
-    try {
-      const credits = await api("generate/credit");
-      dot.className = "dot ok";
-      txt.innerHTML = `<b>${esc(Number(credits).toLocaleString())}</b> credits`;
-      status.innerHTML = `<span class="dot ok"></span> ${getKey() ? "Key works." : "Using the site's server key."} ${esc(Number(credits).toLocaleString())} credits remaining.`;
-      return true;
-    } catch (err) {
-      dot.className = getKey() ? "dot err" : "dot";
-      txt.textContent = getKey() ? "Key problem" : "No API key";
-      status.innerHTML = getKey() ? `<span class="dot err"></span> ${esc(err.message)}` : "";
-      if (!quiet) toast(err.message, "err");
-      return false;
-    }
-  }
-
-  function syncKeyCard() {
-    const hasKey = !!getKey();
-    $("#apiKey").value = getKey();
-    $("#keyCard").classList.toggle("hidden", hasKey && !keyCardForced);
-    $("#clearKey").disabled = !hasKey;
-  }
-  let keyCardForced = false;
-
-  $("#settingsBtn").addEventListener("click", () => {
-    keyCardForced = !keyCardForced || !getKey();
-    syncKeyCard();
-    if (!$("#keyCard").classList.contains("hidden")) { $("#apiKey").focus(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  });
-  $("#toggleKey").addEventListener("click", () => {
-    const i = $("#apiKey"); i.type = i.type === "password" ? "text" : "password";
-  });
-  $("#saveKey").addEventListener("click", async () => {
-    const k = $("#apiKey").value.trim().replace(/^Bearer\s+/i, "");
-    if (!k) { toast("Paste your API key first", "err"); return; }
-    setKey(k);
-    $("#keyStatus").innerHTML = `<span class="spin"></span> Testing key…`;
-    const ok = await refreshCredits({ quiet: false });
-    if (ok) { toast("API key saved", "ok"); keyCardForced = false; syncKeyCard(); }
-  });
-  $("#apiKey").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#saveKey").click(); });
-  $("#clearKey").addEventListener("click", () => {
-    setKey(""); keyCardForced = true; syncKeyCard(); refreshCredits(); toast("API key removed");
-  });
-
-  // ---------------------------------------------------------------------------
-  // Create form
-  // ---------------------------------------------------------------------------
-  let mode = "simple";
-  function setMode(m) {
-    mode = m;
-    $$(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.mode === m));
-    $$("[data-show]").forEach((el) => el.classList.toggle("hidden", el.dataset.show !== m));
-    syncInstrumental();
-  }
-  $$(".tabs button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
-
-  function syncInstrumental() {
-    const inst = $("#instrumental").checked;
-    $("#lyricsBlock").classList.toggle("hidden", inst);
-    $("#audioWeightWrap").classList.toggle("hidden", inst);
-  }
-  $("#instrumental").addEventListener("change", syncInstrumental);
-
-  const counter = (inputSel, outSel) => {
-    const upd = () => { $(outSel).textContent = $(inputSel).value.length; };
-    $(inputSel).addEventListener("input", upd); upd();
-  };
-  counter("#prompt", "#promptCount");
-  counter("#title", "#titleCount");
-  counter("#lyrics", "#lyricsCount");
-  counter("#lyricsPrompt", "#lpCount");
-
-  const sliderOut = (id, outId) => {
-    const upd = () => { $(outId).textContent = Number($(id).value).toFixed(2); };
-    $(id).addEventListener("input", upd); upd();
-  };
-  sliderOut("#styleWeight", "#styleWeightOut");
-  sliderOut("#weirdness", "#weirdnessOut");
-  sliderOut("#audioWeight", "#audioWeightOut");
-  const syncSliders = () => { $("#sliders").style.opacity = $("#useSliders").checked ? 1 : 0.45; };
-  $("#useSliders").addEventListener("change", syncSliders); syncSliders();
-
-  $("#ideaChips").innerHTML = IDEAS.map((i) => `<button type="button" class="chip" data-idea="${esc(i)}">💡 ${esc(i.split(" ").slice(0, 4).join(" "))}…</button>`).join("");
-  $("#ideaChips").addEventListener("click", (e) => {
-    const c = e.target.closest("[data-idea]"); if (!c) return;
-    $("#prompt").value = c.dataset.idea; $("#prompt").dispatchEvent(new Event("input"));
-  });
-  function renderStyleChips() {
-    const favs = profile?.favorite_genres || [];
-    const ordered = [...favs, ...STYLES.filter((s) => !favs.includes(s))];
-    $("#styleChips").innerHTML = ordered.map((s) => favs.includes(s)
-      ? `<button type="button" class="chip fav" data-style="${esc(s)}" title="One of your favorites">★ ${esc(s)}</button>`
-      : `<button type="button" class="chip" data-style="${esc(s)}">+ ${esc(s)}</button>`).join("");
-  }
-  renderStyleChips();
-  $("#styleChips").addEventListener("click", (e) => {
-    const c = e.target.closest("[data-style]"); if (!c) return;
-    const cur = $("#style").value.split(",").map((x) => x.trim()).filter(Boolean);
-    if (!cur.some((x) => x.toLowerCase() === c.dataset.style.toLowerCase())) cur.push(c.dataset.style);
-    $("#style").value = cur.join(", ");
-  });
-
-  function buildPayload() {
-    const instrumental = $("#instrumental").checked;
-    const model = $("#model").value;
-    const style = $("#style").value.trim();
-    const body = { customMode: mode === "custom", instrumental, model, callBackUrl: CALLBACK_URL };
-
-    if (mode === "simple") {
-      const prompt = $("#prompt").value.trim();
-      if (!prompt && !style) throw new Error("Describe your song or enter a style.");
-      if (prompt) body.prompt = prompt;
-      if (style) body.style = style;
-      return body;
-    }
-
-    const title = $("#title").value.trim();
-    const lyrics = $("#lyrics").value.trim();
-    const negativeTags = $("#negativeTags").value.trim();
-    if (!style && !negativeTags && (instrumental || !lyrics)) {
-      throw new Error(instrumental ? "Enter a style for your instrumental." : "Enter a style or some lyrics.");
-    }
-    if (title) body.title = title;
-    if (style) body.style = style;
-    if (negativeTags) body.negativeTags = negativeTags;
-    if (!instrumental) {
-      if (lyrics) body.lyrics = lyrics;
-      const vg = $("input[name=vocal]:checked").value;
-      if (vg) body.vocalGender = vg;
-    }
-    const dur = $("#duration").value.trim();
-    if (dur) {
-      const n = Math.round(Number(dur));
-      if (!(n >= 10 && n <= 360)) throw new Error("Duration must be between 10 and 360 seconds.");
-      body.duration = n;
-    }
-    if ($("#useSliders").checked) {
-      body.styleWeight = Number($("#styleWeight").value);
-      body.weirdnessConstraint = Number($("#weirdness").value);
-      if (!instrumental) body.audioWeight = Number($("#audioWeight").value);
-    }
-    const variety = Number($("#variety").value);
-    if (variety !== 1) body.variety = variety;
-    return body;
-  }
-
-  function requireKey() {
-    if (getKey() || $("#keyDot").classList.contains("ok")) return true;
-    keyCardForced = true; syncKeyCard();
-    $("#apiKey").focus(); window.scrollTo({ top: 0, behavior: "smooth" });
-    toast("Add your Suno API key first", "err");
-    return false;
-  }
-
-  $("#genForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!requireKey()) return;
-    let body;
-    try { body = buildPayload(); } catch (err) { toast(err.message, "err"); return; }
-    const btn = $("#genBtn");
-    btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Starting…`;
-    try {
-      const data = await api("generate", { method: "POST", body });
-      const task = {
-        taskId: data.taskId, kind: "generate", mode, model: body.model,
-        prompt: body.prompt || "", title: body.title || "", style: body.style || "",
-        instrumental: body.instrumental, status: "PENDING", tracks: [], createdAt: Date.now(),
-      };
-      library.unshift(task); saveLib(); renderLibrary();
-      toast("Generation started. Tracks will appear on the right.", "ok");
-      pollTask(task.taskId);
-      if (window.innerWidth <= 960) $("#library").scrollIntoView({ behavior: "smooth" });
-      refreshCredits();
-    } catch (err) {
-      toast(err.message, "err");
-    } finally {
-      btn.disabled = false; btn.innerHTML = "🎶 Generate music";
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // AI lyrics
-  // ---------------------------------------------------------------------------
-  $("#genLyricsBtn").addEventListener("click", async () => {
-    if (!requireKey()) return;
-    const prompt = $("#lyricsPrompt").value.trim();
-    if (!prompt) { toast("Describe what the song should be about", "err"); return; }
-    const btn = $("#genLyricsBtn"), out = $("#lyricOptions");
-    btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Writing lyrics…`;
-    out.innerHTML = "";
-    try {
-      const { taskId } = await api("lyrics", { method: "POST", body: { prompt, callBackUrl: CALLBACK_URL } });
-      const start = Date.now();
-      let results = null;
-      while (Date.now() - start < 3 * 60 * 1000) {
-        await sleep(LYRICS_POLL_MS);
-        let info;
-        try { info = await api("lyrics/record-info", { query: { taskId } }); } catch (err) { if (err.code === 401 || err.code === "AUTH") throw err; continue; }
-        const status = info?.status || info?.response?.status;
-        const items = info?.response?.data || [];
-        if (FAIL_STATES.has(status)) throw new Error(info?.errorMessage || info?.response?.errorMessage || STATUS_LABEL[status] || "Lyrics generation failed");
-        if (status === "SUCCESS" || (items.length && items.every((i) => i.status === "complete"))) { results = items.filter((i) => i.text); break; }
-      }
-      if (!results) throw new Error("Lyrics generation timed out. Try again.");
-      if (!results.length) throw new Error("No lyrics were returned. Try a different prompt.");
-      out.innerHTML = results.map((r, i) => `
-        <div class="lyric-opt">
-          <b>${esc(r.title || `Option ${i + 1}`)}</b>
-          <pre>${esc(r.text)}</pre>
-          <button type="button" class="btn sm primary" data-use="${i}">Use these lyrics</button>
-        </div>`).join("");
-      out.onclick = (e) => {
-        const b = e.target.closest("[data-use]"); if (!b) return;
-        const r = results[Number(b.dataset.use)];
-        $("#lyrics").value = r.text.replace(/^\|-\s*\n?/, "").trim();
-        $("#lyrics").dispatchEvent(new Event("input"));
-        if (r.title && !$("#title").value.trim()) { $("#title").value = r.title.slice(0, 80); $("#title").dispatchEvent(new Event("input")); }
-        toast("Lyrics added", "ok");
-      };
-      refreshCredits();
-    } catch (err) {
-      toast(err.message, "err");
-    } finally {
-      btn.disabled = false; btn.textContent = "Generate lyrics";
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Extend
-  // ---------------------------------------------------------------------------
-  let extendCtx = null;
-  function openExtend(task, track) {
-    extendCtx = { task, track };
-    const dur = Math.floor(track.duration || 60);
-    $("#exContinue").value = Math.max(0, dur - 30);
-    $("#exContinue").max = dur;
-    $("#exTitle").value = `${track.title} (Extended)`.slice(0, 100);
-    $("#exStyle").value = track.tags || task.style || "";
-    $("#exLyrics").value = "";
-    $("#exLyricsWrap").classList.toggle("hidden", !!task.instrumental);
-    $("#extendSub").textContent = `Continue "${track.title}" (${fmtTime(track.duration)}) from a chosen point.`;
-    $("#extendModal").classList.remove("hidden");
-  }
-  const closeExtend = () => { $("#extendModal").classList.add("hidden"); extendCtx = null; };
-  $("#exCancel").addEventListener("click", closeExtend);
-  $("#extendModal").addEventListener("click", (e) => { if (e.target.id === "extendModal") closeExtend(); });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (extendCtx) closeExtend();
-    else if (!$("#profileModal").classList.contains("hidden")) closeProfile();
-  });
-
-  $("#extendForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!extendCtx || !requireKey()) return;
-    const { task, track } = extendCtx;
-    const body = {
-      audioId: track.id,
-      taskId: task.taskId,
-      continueAt: Number($("#exContinue").value),
-      model: task.model || "V6",
-      instrumental: !!task.instrumental,
-      callBackUrl: CALLBACK_URL,
-    };
-    const title = $("#exTitle").value.trim(), style = $("#exStyle").value.trim(), lyrics = $("#exLyrics").value.trim();
-    if (title) body.title = title;
-    if (style) body.style = style;
-    if (lyrics && !task.instrumental) { body.lyrics = lyrics; body.prompt = lyrics; }
-    const btn = $("#exSubmit");
-    btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
-    try {
-      const data = await api("generate/extend", { method: "POST", body });
-      const nt = {
-        taskId: data.taskId, kind: "extend", mode: "custom", model: body.model,
-        title: title || `${track.title} (Extended)`, style, prompt: "", instrumental: body.instrumental,
-        status: "PENDING", tracks: [], createdAt: Date.now(),
-      };
-      library.unshift(nt); saveLib(); renderLibrary(); pollTask(nt.taskId);
-      toast("Extension started", "ok");
-      closeExtend(); refreshCredits();
-    } catch (err) {
-      toast(err.message, "err");
-    } finally {
-      btn.disabled = false; btn.textContent = "Extend";
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Boot (runs once a user is signed in)
-  // ---------------------------------------------------------------------------
-  let started = false;
-  function startApp(user) {
-    if (started) return;
-    started = true;
-    LS_KEY = `suno.apiKey:${user.id}`;
-    LS_LIB = `suno.library.v1:${user.id}`;
-    try {
-      // Hand data saved before login existed to the first account that signs in here.
-      for (const [oldKey, newKey] of [["suno.apiKey", LS_KEY], ["suno.library.v1", LS_LIB]]) {
-        const v = localStorage.getItem(oldKey);
-        if (v !== null) { if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, v); localStorage.removeItem(oldKey); }
-      }
-    } catch {}
-    try { library = JSON.parse(localStorage.getItem(LS_LIB) || "[]"); } catch { library = []; }
-
-    setMode("simple");
-    syncKeyCard();
-    renderLibrary();
-    refreshCredits();
-    library.filter((t) => !isDone(t)).forEach((t) => pollTask(t.taskId));
-    setInterval(() => { if (!document.hidden) renderLibraryMetaOnly(); }, 60000);
-  }
-  function renderLibraryMetaOnly() {
-    // Refresh "x min ago" labels without disturbing audio players.
-    $$(".task").forEach((el) => {
-      const t = findTask(el.dataset.task); if (!t) return;
-      const meta = $(".meta", el);
-      const kind = t.kind === "extend" ? "⏩ Extension · " : t.mode === "custom" ? "🎛️ Custom · " : "✨ Simple · ";
-      meta.textContent = `${kind}${t.model || ""}${t.style ? " · " + t.style : ""} · ${ago(t.createdAt)}`;
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Email login (Supabase Auth)
-  // ---------------------------------------------------------------------------
-  const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-  });
-  const redirectTo = /^https?:$/.test(location.protocol) ? `${location.origin}/` : undefined;
-
-  async function getAccessToken() {
-    if (!sb) return "";
-    try { const { data } = await sb.auth.getSession(); return data.session?.access_token || ""; } catch { return ""; }
-  }
-
-  let lostHandled = false;
-  async function sessionLost() {
-    if (lostHandled) return;
-    lostHandled = true;
-    toast("Your session expired. Please sign in again.", "err");
-    try { await sb?.auth.signOut({ scope: "local" }); } catch {}
-    location.reload();
-  }
-
-  const AUTH_VIEWS = {
-    signin: { title: "Sign in", sub: "Use your email and password.", submit: "Sign in", pass: true, passAuto: "current-password", hint: "" },
-    signup: { title: "Create your account", sub: "Sign up with your email. We'll send a link to confirm it.", submit: "Create account", pass: true, passAuto: "new-password", hint: "at least 6 characters" },
-    forgot: { title: "Reset your password", sub: "Enter your email and we'll send you a reset link.", submit: "Send reset link", pass: false },
-    reset: { title: "Choose a new password", sub: "Enter a new password for your account.", submit: "Save new password", pass: true, passAuto: "new-password", hint: "at least 6 characters", noEmail: true },
-  };
-  let authView = "signin";
-
-  function authMsg(text, kind = "") {
-    const el = $("#authMsg");
-    el.className = `auth-msg ${kind}`;
-    el.textContent = text;
-    el.classList.toggle("hidden", !text);
-  }
-
-  function setAuthView(v, { keepMsg = false } = {}) {
-    authView = v;
-    const cfg = AUTH_VIEWS[v];
-    $("#authTitle").textContent = cfg.title;
-    $("#authSub").textContent = cfg.sub;
-    $("#authSubmit").textContent = cfg.submit;
-    $("#authEmailWrap").classList.toggle("hidden", !!cfg.noEmail);
-    $("#authPassWrap").classList.toggle("hidden", !cfg.pass);
-    $("#authPass").autocomplete = cfg.passAuto || "off";
-    $("#authPassHint").textContent = cfg.hint || "";
-    $("#authPass").value = "";
-    $("#toSignup").classList.toggle("hidden", v !== "signin");
-    $("#toSignin").classList.toggle("hidden", v === "signin" || v === "reset");
-    $("#toForgot").classList.toggle("hidden", v !== "signin");
-    if (!keepMsg) authMsg("");
-    showAuth();
-    (cfg.noEmail || ($("#authEmail").value && cfg.pass) ? $("#authPass") : $("#authEmail")).focus();
-  }
-
-  function showAuth() {
-    document.body.classList.remove("authed");
-    $("#authLoading").classList.add("hidden");
-    $("#authPanel").classList.remove("hidden");
-  }
-
-  function showApp(user) {
-    currentUser = user;
-    renderProfileBadge();
-    document.body.classList.add("authed");
-    startApp(user);
-    loadProfile(user);
-  }
-
-  $$("[data-auth-view]").forEach((b) => b.addEventListener("click", () => setAuthView(b.dataset.authView)));
-
-  $("#authForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const email = $("#authEmail").value.trim();
-    const password = $("#authPass").value;
-    const cfg = AUTH_VIEWS[authView];
-    if (!cfg.noEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { authMsg("Enter a valid email address.", "err"); return; }
-    if (cfg.pass && password.length < 6) { authMsg("Password must be at least 6 characters.", "err"); return; }
-
-    const btn = $("#authSubmit");
-    btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
-    authMsg("");
-    try {
-      if (authView === "signin") {
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) {
-          if (/not confirmed/i.test(error.message)) throw new Error("Please confirm your email first. Check your inbox for the link.");
-          if (/invalid login credentials/i.test(error.message)) throw new Error("Wrong email or password.");
-          throw error;
-        }
-      } else if (authView === "signup") {
-        const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
-        if (error) throw error;
-        if (!data.session) {
-          // Email confirmation is on: the user must click the link we just sent.
-          setAuthView("signin", { keepMsg: true });
-          $("#authEmail").value = email;
-          authMsg(`Almost done. We sent a confirmation link to ${email}. Click it, then sign in.`, "ok");
-        }
-      } else if (authView === "forgot") {
-        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
-        if (error) throw error;
-        setAuthView("signin", { keepMsg: true });
-        authMsg(`If ${email} has an account, a reset link is on its way.`, "ok");
-      } else if (authView === "reset") {
-        const { error } = await sb.auth.updateUser({ password });
-        if (error) throw error;
-        const { data } = await sb.auth.getSession();
-        toast("Password updated", "ok");
-        if (data.session) showApp(data.session.user); else setAuthView("signin");
-      }
-    } catch (err) {
-      authMsg(err.message || "Something went wrong. Try again.", "err");
-    } finally {
-      btn.disabled = false; btn.textContent = AUTH_VIEWS[authView].submit;
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Profile (public.profiles table + "avatars" storage bucket)
-  // ---------------------------------------------------------------------------
-  let draft = null; // edits in the open profile form
-
-  const initial = (name) => (name || "?").trim().charAt(0).toUpperCase() || "?";
-  function avatarHtml(url, name) {
-    return url ? `<img src="${esc(url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc(initial(name));
-  }
-
-  function renderProfileBadge() {
-    const name = profile?.display_name || currentUser?.email?.split("@")[0] || "Profile";
-    $("#headerAvatar").innerHTML = avatarHtml(safeUrl(profile?.avatar_url), name);
-    $("#profileName").textContent = name;
-    $("#profileBtn").title = `Your profile (${currentUser?.email || ""})`;
-  }
-
-  async function loadProfile(user) {
-    try {
-      let { data, error } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
-      if (error) throw error;
-      if (!data) {
-        // Normally created at sign-up by a database trigger; create it here if missing.
-        ({ data, error } = await sb.from("profiles").upsert({ id: user.id }).select().single());
-        if (error) throw error;
-      }
-      profile = data;
-      profileLoaded = true;
-      renderProfileBadge();
-      renderStyleChips();
-      let skipped = false;
-      try { skipped = localStorage.getItem(`suno.profileSkipped:${user.id}`) === "1"; } catch {}
-      if (!profile.display_name && !skipped) openProfile({ welcome: true });
-    } catch (err) {
-      toast(`Could not load your profile: ${err.message}`, "err");
-    }
-  }
-
-  function renderDraft() {
-    $("#pfAvatar").innerHTML = avatarHtml(safeUrl(draft.avatar_url), $("#pfName").value || currentUser?.email);
-    $("#pfRemovePhoto").classList.toggle("hidden", !draft.avatar_url);
-    $("#pfGenres").innerHTML = STYLES.map((s) =>
-      `<button type="button" class="chip ${draft.favorite_genres.includes(s) ? "on" : ""}" data-genre="${esc(s)}">${draft.favorite_genres.includes(s) ? "★" : "+"} ${esc(s)}</button>`).join("");
-  }
-
-  function openProfile({ welcome = false } = {}) {
-    if (!profileLoaded) { toast("Profile is still loading…"); return; }
-    draft = { avatar_url: profile.avatar_url || "", favorite_genres: [...(profile.favorite_genres || [])], welcome };
-    $("#profileTitle").textContent = welcome ? "👋 Welcome! Set up your profile" : "Your profile";
-    $("#profileSub").textContent = welcome ? "Pick a name and a photo. You can change these any time from the top right." : "This is how you appear in Suno Studio.";
-    $("#pfCancel").textContent = welcome ? "Skip for now" : "Cancel";
-    $("#pfName").value = profile.display_name || "";
-    $("#pfBio").value = profile.bio || "";
-    $("#pfEmail").value = currentUser?.email || "";
-    ["#pfName", "#pfBio"].forEach((sel) => $(sel).dispatchEvent(new Event("input")));
-    renderDraft();
-    $("#profileModal").classList.remove("hidden");
-    $("#pfName").focus();
-  }
-
-  function closeProfile() {
-    if (draft?.welcome) { try { localStorage.setItem(`suno.profileSkipped:${currentUser.id}`, "1"); } catch {} }
-    $("#profileModal").classList.add("hidden");
-    $("#pfFile").value = "";
-    draft = null;
-  }
-
-  counter("#pfName", "#pfNameCount");
-  counter("#pfBio", "#pfBioCount");
-  $("#pfName").addEventListener("input", () => { if (draft && !draft.avatar_url) renderDraft(); });
-  $("#profileBtn").addEventListener("click", () => openProfile());
-  $("#pfCancel").addEventListener("click", closeProfile);
-  $("#profileModal").addEventListener("click", (e) => { if (e.target.id === "profileModal") closeProfile(); });
-
-  $("#pfGenres").addEventListener("click", (e) => {
-    const c = e.target.closest("[data-genre]"); if (!c || !draft) return;
-    const g = c.dataset.genre, list = draft.favorite_genres;
-    if (list.includes(g)) draft.favorite_genres = list.filter((x) => x !== g);
-    else if (list.length >= 10) { toast("Pick up to 10 favorite genres", "err"); return; }
-    else list.push(g);
-    renderDraft();
-  });
-
-  // Crop to a centered square and shrink to 256px so uploads stay small.
-  function squareImage(file, size = 256) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const side = Math.min(img.naturalWidth, img.naturalHeight);
-        const canvas = document.createElement("canvas");
-        canvas.width = canvas.height = size;
-        canvas.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not process the image."))), "image/jpeg", 0.88);
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file isn't an image we can read.")); };
-      img.src = url;
-    });
-  }
-
-  $("#pfFile").addEventListener("change", async () => {
-    const file = $("#pfFile").files[0];
-    if (!file || !draft) return;
-    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { toast("Choose a PNG, JPG, WebP or GIF image", "err"); return; }
-    if (file.size > 15 * 1024 * 1024) { toast("That image is too large (max 15 MB)", "err"); return; }
-    const label = $("label[for=pfFile]");
-    label.innerHTML = `<span class="spin"></span> Uploading…`;
-    try {
-      const blob = await squareImage(file);
-      const path = `${currentUser.id}/avatar-${Date.now()}.jpg`;
-      const { error } = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
-      if (error) throw error;
-      draft.avatar_url = sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
-      renderDraft();
-    } catch (err) {
-      toast(`Upload failed: ${err.message}`, "err");
-    } finally {
-      label.textContent = "📷 Upload photo";
-      $("#pfFile").value = "";
-    }
-  });
-
-  $("#pfRemovePhoto").addEventListener("click", () => { if (draft) { draft.avatar_url = ""; renderDraft(); } });
-
-  // Delete old avatar files the profile no longer points to.
-  async function cleanupAvatars(keepUrl) {
-    try {
-      const { data } = await sb.storage.from("avatars").list(currentUser.id);
-      const stale = (data || []).map((f) => `${currentUser.id}/${f.name}`).filter((p) => !keepUrl || !keepUrl.endsWith(`/${p}`));
-      if (stale.length) await sb.storage.from("avatars").remove(stale);
-    } catch {}
-  }
-
-  $("#profileForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!draft) return;
-    const display_name = $("#pfName").value.trim();
-    const bio = $("#pfBio").value.trim();
-    if (!display_name) { toast("Enter a display name", "err"); $("#pfName").focus(); return; }
-    const btn = $("#pfSave");
-    btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Saving…`;
-    try {
-      const { data, error } = await sb.from("profiles").upsert({
-        id: currentUser.id,
-        display_name,
-        bio: bio || null,
-        avatar_url: draft.avatar_url || null,
-        favorite_genres: draft.favorite_genres,
-      }).select().single();
-      if (error) throw error;
-      profile = data;
-      renderProfileBadge();
-      renderStyleChips();
-      cleanupAvatars(profile.avatar_url);
-      draft.welcome = false;
-      closeProfile();
-      toast("Profile saved", "ok");
-    } catch (err) {
-      toast(`Could not save your profile: ${err.message}`, "err");
-    } finally {
-      btn.disabled = false; btn.textContent = "Save profile";
-    }
-  });
-
-  $("#signOutBtn").addEventListener("click", async () => {
-    $("#signOutBtn").disabled = true;
-    try { await sb.auth.signOut(); } catch {}
-    location.reload();
-  });
-
-  (async function initAuth() {
-    if (!sb) {
-      showAuth();
-      $("#authForm").classList.add("hidden");
-      $(".auth-links").classList.add("hidden");
-      authMsg("Could not load the login library. Check your connection and reload.", "err");
-      return;
-    }
-    // Errors from an expired or reused email link come back in the URL hash.
-    const hash = new URLSearchParams(location.hash.slice(1));
-    const linkError = hash.get("error_description");
-    const recovering = hash.get("type") === "recovery";
-
-    sb.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") { setAuthView("reset"); return; }
-      if (event === "SIGNED_IN" && session && !recovering && authView !== "reset") setTimeout(() => showApp(session.user), 0);
-      if (event === "SIGNED_OUT" && started) location.reload();
-    });
-
-    const { data } = await sb.auth.getSession();
-    if (linkError || location.hash.includes("access_token")) history.replaceState(null, "", location.pathname + location.search);
-    if (recovering || authView === "reset") { setAuthView("reset"); return; }
-    if (data.session) { showApp(data.session.user); return; }
-    setAuthView("signin");
-    if (linkError) authMsg(`${linkError.replace(/\+/g, " ")}. Request a new link and try again.`, "err");
-  })();
-})();
-</script>
+<script src="js/password.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
