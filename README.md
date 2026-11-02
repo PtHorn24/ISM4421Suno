@@ -5,7 +5,8 @@ A one-page AI music generator built on the [Suno API](https://docs.sunoapi.org),
 ## Features
 
 - **Profiles.** Each user has a profile with a display name, photo, short bio and favorite genres (which appear first in the style picker). New users are asked to set it up after their first sign-in, and can edit it any time from their avatar in the top right.
-- **Email login.** Visitors must sign in with email and password (Supabase Auth) before they can use the app. Includes sign-up with email confirmation, forgot/reset password and sign out. The Netlify proxy also checks the login, so the API can't be used without an account.
+- **Google login.** A **Continue with Google** button (Supabase OAuth). The first time someone signs in with Google, their Google name and photo fill in their profile.
+- **Email login.** Visitors must sign in with Google or with email and password (Supabase Auth) before they can use the app. Includes sign-up with email confirmation, forgot/reset password and sign out. The Netlify proxy also checks the login, so the API can't be used without an account.
 - **API key box.** Paste your key from [sunoapi.org/api-key](https://sunoapi.org/api-key). It's saved in your browser's localStorage and tested right away. Remaining credits show in the header.
 - **Simple mode.** Describe a song in plain English. Style chips and idea starters are included.
 - **Custom mode.** Title, style, your own lyrics, vocal gender, negative tags, duration, style/weirdness/audio-weight sliders and variety.
@@ -21,7 +22,18 @@ One-time setup in the Supabase dashboard:
 
 1. **Authentication → URL Configuration.** Set **Site URL** to your Netlify URL (for example `https://your-site.netlify.app`) and add `https://your-site.netlify.app/**` under **Redirect URLs**. Without this, the confirmation and password-reset emails link to `localhost`.
 2. **Authentication → Sign In / Providers → Email** is on by default. Leave **Confirm email** on unless you want people to sign in without confirming.
-3. Supabase's built-in email sender only allows a few emails per hour. For real use, add your own SMTP server under **Authentication → Emails → SMTP Settings**.
+3. **Google sign-in** (optional): see *Sign in with Google* below.
+4. Supabase's built-in email sender only allows a few emails per hour. For real use, add your own SMTP server under **Authentication → Emails → SMTP Settings**.
+
+### Sign in with Google
+
+The code is done. The credentials are set up by hand. The client secret goes only into Supabase, never into this repo.
+
+1. Supabase: **Authentication → Sign In / Providers → Google**. Copy the **Callback URL** (`https://exdkeaomgxdnnzbszgfs.supabase.co/auth/v1/callback`).
+2. Google Cloud: create a project, open **Google Auth Platform → Get started**. Set Branding, choose Audience **External** (add your Gmail under **Test users** while in Testing), and under Data Access check `openid`, `.../auth/userinfo.email` and `.../auth/userinfo.profile`.
+3. **Clients → Create client → Web application.** JavaScript origins: your Netlify URL and `http://localhost:5173`. Redirect URI: the callback URL from step 1. Copy the Client ID and Client secret.
+4. Back in Supabase, turn on **Enable Sign in with Google**, paste both values, and save.
+5. In **URL Configuration → Redirect URLs**, make sure `https://your-site.netlify.app/**` and `http://localhost:5173/**` are listed.
 
 ### Database
 
@@ -63,4 +75,4 @@ If you set a `SUNO_API_KEY` environment variable in Netlify (Site settings → E
 npx netlify-cli dev
 ```
 
-Then open http://localhost:8888.
+Then open http://localhost:5173 (the port is set in `netlify.toml`).

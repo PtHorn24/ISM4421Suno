@@ -238,6 +238,11 @@
   .auth-msg.ok { border-color: rgba(34, 197, 94, .5); color: #86efac; }
   .auth-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; font-size: 13px; flex-wrap: wrap; }
   .auth-links button { background: none; border: 0; padding: 0; color: #c4a1ff; cursor: pointer; text-decoration: underline; }
+  .btn.google { width: 100%; padding: 12px; font-size: 15px; border-radius: 12px; background: #fff; color: #1f1f1f; border-color: #dadce0; gap: 10px; }
+  .btn.google:hover { background: #f2f2f2; border-color: #dadce0; }
+  .btn.google svg { width: 18px; height: 18px; flex: none; }
+  .auth-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 16px 0; }
+  .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
   .auth-loading { color: var(--muted); display: flex; align-items: center; gap: 10px; }
 
   /* ---------- Profile ---------- */
@@ -270,8 +275,15 @@
       <div class="auth-loading" id="authLoading"><span class="spin"></span> Loading…</div>
       <div id="authPanel" class="hidden">
         <h2 id="authTitle">Sign in</h2>
-        <p class="sub" id="authSub">Use your email and password.</p>
+        <p class="sub" id="authSub">Use your Google account or your email and password.</p>
         <div class="auth-msg hidden" id="authMsg" role="status"></div>
+        <div id="oauthWrap">
+          <button class="btn google" type="button" id="googleBtn">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            <span>Continue with Google</span>
+          </button>
+          <div class="auth-or">or use email</div>
+        </div>
         <form id="authForm" novalidate>
           <label class="field" id="authEmailWrap">
             <span class="lbl">Email</span>
@@ -1176,7 +1188,7 @@
   }
 
   const AUTH_VIEWS = {
-    signin: { title: "Sign in", sub: "Use your email and password.", submit: "Sign in", pass: true, passAuto: "current-password", hint: "" },
+    signin: { title: "Sign in", sub: "Use your Google account or your email and password.", submit: "Sign in", pass: true, passAuto: "current-password", hint: "" },
     signup: { title: "Create your account", sub: "Sign up with your email. We'll send a link to confirm it.", submit: "Create account", pass: true, passAuto: "new-password", hint: "at least 6 characters" },
     forgot: { title: "Reset your password", sub: "Enter your email and we'll send you a reset link.", submit: "Send reset link", pass: false },
     reset: { title: "Choose a new password", sub: "Enter a new password for your account.", submit: "Save new password", pass: true, passAuto: "new-password", hint: "at least 6 characters", noEmail: true },
@@ -1204,6 +1216,7 @@
     $("#toSignup").classList.toggle("hidden", v !== "signin");
     $("#toSignin").classList.toggle("hidden", v === "signin" || v === "reset");
     $("#toForgot").classList.toggle("hidden", v !== "signin");
+    $("#oauthWrap").classList.toggle("hidden", v !== "signin" && v !== "signup");
     if (!keepMsg) authMsg("");
     showAuth();
     (cfg.noEmail || ($("#authEmail").value && cfg.pass) ? $("#authPass") : $("#authEmail")).focus();
@@ -1222,6 +1235,19 @@
     startApp(user);
     loadProfile(user);
   }
+
+  // Sign in with Google: Google -> Supabase callback -> back to this same page.
+  $("#googleBtn").addEventListener("click", async () => {
+    const btn = $("#googleBtn");
+    btn.disabled = true;
+    authMsg("");
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: location.origin + location.pathname + location.search },
+    });
+    // On success the browser is already leaving for Google.
+    if (error) { authMsg(error.message || "Could not start Google sign-in.", "err"); btn.disabled = false; }
+  });
 
   $$("[data-auth-view]").forEach((b) => b.addEventListener("click", () => setAuthView(b.dataset.authView)));
 
@@ -1282,9 +1308,13 @@
     return url ? `<img src="${esc(url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc(initial(name));
   }
 
+  // Name and photo from the sign-in provider (Google sets these in user_metadata).
+  const metaName = (u) => (u?.user_metadata?.full_name || u?.user_metadata?.name || "").trim().slice(0, 50);
+  const metaPhoto = (u) => safeUrl(u?.user_metadata?.avatar_url || u?.user_metadata?.picture);
+
   function renderProfileBadge() {
-    const name = profile?.display_name || currentUser?.email?.split("@")[0] || "Profile";
-    $("#headerAvatar").innerHTML = avatarHtml(safeUrl(profile?.avatar_url), name);
+    const name = profile?.display_name || metaName(currentUser) || currentUser?.email?.split("@")[0] || "Profile";
+    $("#headerAvatar").innerHTML = avatarHtml(safeUrl(profile?.avatar_url) || metaPhoto(currentUser), name);
     $("#profileName").textContent = name;
     $("#profileBtn").title = `Your profile (${currentUser?.email || ""})`;
   }
@@ -1297,6 +1327,14 @@
         // Normally created at sign-up by a database trigger; create it here if missing.
         ({ data, error } = await sb.from("profiles").upsert({ id: user.id }).select().single());
         if (error) throw error;
+      }
+      // First Google sign-in: fill an empty profile with the Google name and photo.
+      const fill = {};
+      if (!data.display_name && metaName(user)) fill.display_name = metaName(user);
+      if (!data.avatar_url && /^https:\/\//i.test(metaPhoto(user))) fill.avatar_url = metaPhoto(user);
+      if (Object.keys(fill).length) {
+        const res = await sb.from("profiles").update(fill).eq("id", user.id).select().single();
+        if (!res.error) data = res.data;
       }
       profile = data;
       profileLoaded = true;
@@ -1448,12 +1486,15 @@
       showAuth();
       $("#authForm").classList.add("hidden");
       $(".auth-links").classList.add("hidden");
+      $("#oauthWrap").classList.add("hidden");
       authMsg("Could not load the login library. Check your connection and reload.", "err");
       return;
     }
     // Errors from an expired or reused email link come back in the URL hash.
+    // Google sign-in errors (e.g. "access denied") can arrive in the query string too.
     const hash = new URLSearchParams(location.hash.slice(1));
-    const linkError = hash.get("error_description");
+    const query = new URLSearchParams(location.search);
+    const linkError = hash.get("error_description") || query.get("error_description");
     const recovering = hash.get("type") === "recovery";
 
     sb.auth.onAuthStateChange((event, session) => {
@@ -1463,7 +1504,8 @@
     });
 
     const { data } = await sb.auth.getSession();
-    if (linkError || location.hash.includes("access_token")) history.replaceState(null, "", location.pathname + location.search);
+    if (query.has("error_description")) { ["error", "error_code", "error_description"].forEach((k) => query.delete(k)); }
+    if (linkError || location.hash.includes("access_token")) history.replaceState(null, "", location.pathname + (query.toString() ? `?${query}` : ""));
     if (recovering || authView === "reset") { setAuthView("reset"); return; }
     if (data.session) { showApp(data.session.user); return; }
     setAuthView("signin");
