@@ -134,6 +134,11 @@ body.authed #authScreen { display: none; }
 .auth-title { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
 .auth-box form { display: grid; }
 .auth-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.btn.google { width: 100%; padding: 12px; font-size: 15px; background: #fff; color: #1f1f1f; border: 1px solid #dadce0; gap: 10px; justify-content: center; }
+.btn.google:hover { background: #f2f2f2; }
+.btn.google svg { width: 18px; height: 18px; flex: none; }
+.auth-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 16px 0; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .auth-loading { color: var(--muted); display: flex; align-items: center; gap: 10px; }
 .fine { color: #c9d6e6; font-size: 12px; text-align: center; margin-top: 14px; }
 .team-logo { width: 64px; height: 64px; object-fit: contain; flex: none; }
