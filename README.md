@@ -42,6 +42,15 @@ The app uses the Supabase project `exdkeaomgxdnnzbszgfs` (same as Suno Studio). 
 3. **Authentication → URL Configuration.** Set **Site URL** to your Netlify URL (for example `https://owls-gameday.netlify.app`) and add `https://owls-gameday.netlify.app/**` under **Redirect URLs**. Without this, the confirmation and password-reset emails link to the old site or `localhost`.
 4. Optional: under **Authentication → Sign In / Providers → Email**, set the minimum password length to 8 so the server enforces the same rule as the app.
 
+### Sign in with Google
+
+The login screen has a **Continue with Google** button (supabase-js `signInWithOAuth`). On the first Google sign-in, the Google name and photo fill in the user's profile. One-time setup, done by hand (the client secret goes only into Supabase, never into this repo):
+
+1. Google Cloud → **Google Auth Platform**: Audience **External**, add testers under **Test users**, and Data Access scopes `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile`.
+2. **Clients → Create client → Web application.** JavaScript origins: the Netlify URL and `http://localhost:5173`. Redirect URI: `https://exdkeaomgxdnnzbszgfs.supabase.co/auth/v1/callback`.
+3. Supabase → **Authentication → Sign In / Providers → Google**: enable it and paste the Client ID and Client secret.
+4. Supabase → **URL Configuration → Redirect URLs**: add `http://localhost:5173/**` too.
+
 ## Deploy to Netlify
 
 1. In Netlify: **Add new site → Import an existing project**, then pick this repo and branch.
@@ -57,7 +66,7 @@ Or with the CLI: `npx netlify-cli deploy --prod`.
 npx netlify-cli dev
 ```
 
-Then open http://localhost:8888. (The ESPN data needs the Netlify Function, so opening `index.html` directly won't load scores.)
+Then open http://localhost:5173 (the port is set in `netlify.toml`). (The ESPN data needs the Netlify Function, so opening `index.html` directly won't load scores.)
 
 ## Credits
 

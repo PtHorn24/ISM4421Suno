@@ -403,7 +403,7 @@
   }
 
   function renderHome() {
-    const name = profile?.display_name || currentUser?.email?.split("@")[0] || "";
+    const name = profile?.display_name || metaName(currentUser) || currentUser?.email?.split("@")[0] || "";
     const hr = new Date().getHours();
     $("#greeting").textContent = `${hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening"}${name ? `, ${name}` : ""}! 🦉`;
     const favs = profile?.favorite_sports?.length;
@@ -532,7 +532,7 @@
   }
 
   const AUTH_VIEWS = {
-    signin: { title: "Sign in", sub: "Use your email and password.", submit: "Sign in", pass: true, passAuto: "current-password" },
+    signin: { title: "Sign in", sub: "Use your Google account or your email and password.", submit: "Sign in", pass: true, passAuto: "current-password" },
     signup: { title: "Create your account", sub: "Sign up with your email. We'll send a link to confirm it.", submit: "Create account", pass: true, passAuto: "new-password", newPw: true },
     forgot: { title: "Reset your password", sub: "Enter your email and we'll send you a reset link.", submit: "Send reset link", pass: false },
     reset: { title: "Choose a new password", sub: "Enter a new password for your account.", submit: "Save new password", pass: true, passAuto: "new-password", newPw: true, noEmail: true },
@@ -621,6 +621,7 @@
     $("#toSignup").classList.toggle("hidden", v !== "signin");
     $("#toSignin").classList.toggle("hidden", v === "signin" || v === "reset");
     $("#toForgot").classList.toggle("hidden", v !== "signin");
+    $("#oauthWrap").classList.toggle("hidden", v !== "signin" && v !== "signup");
     if (!keepMsg) authMsg("");
     showAuth();
     (cfg.noEmail || ($("#authEmail").value && cfg.pass) ? $("#authPass") : $("#authEmail")).focus();
@@ -639,6 +640,19 @@
     startApp();
     loadProfile(user);
   }
+
+  // Sign in with Google: Google -> Supabase callback -> back to this same page.
+  $("#googleBtn").addEventListener("click", async () => {
+    const btn = $("#googleBtn");
+    btn.disabled = true;
+    authMsg("");
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: location.origin + location.pathname + location.search },
+    });
+    // On success the browser is already leaving for Google.
+    if (error) { authMsg(error.message || "Could not start Google sign-in.", "err"); btn.disabled = false; }
+  });
 
   $$("[data-auth-view]").forEach((b) => b.addEventListener("click", () => setAuthView(b.dataset.authView)));
   // Clear an old error as soon as the visitor starts fixing it.
@@ -709,9 +723,13 @@
   const initial = (name) => (name || "?").trim().charAt(0).toUpperCase() || "?";
   const avatarHtml = (url, name) => (url ? `<img src="${esc(url)}" alt="">` : esc(initial(name)));
 
+  // Name and photo from the sign-in provider (Google sets these in user_metadata).
+  const metaName = (u) => (u?.user_metadata?.full_name || u?.user_metadata?.name || "").trim().slice(0, 50);
+  const metaPhoto = (u) => safeUrl(u?.user_metadata?.avatar_url || u?.user_metadata?.picture);
+
   function renderProfileBadge() {
-    const name = profile?.display_name || currentUser?.email?.split("@")[0] || "Account";
-    $("#headerAvatar").innerHTML = avatarHtml(safeUrl(profile?.avatar_url), name);
+    const name = profile?.display_name || metaName(currentUser) || currentUser?.email?.split("@")[0] || "Account";
+    $("#headerAvatar").innerHTML = avatarHtml(safeUrl(profile?.avatar_url) || metaPhoto(currentUser), name);
     $("#profileName").textContent = name;
     $("#profileBtn").title = `Your account (${currentUser?.email || ""})`;
   }
@@ -724,6 +742,14 @@
         // Normally created at sign-up by a database trigger; create it here if missing.
         ({ data, error } = await sb.from("profiles").upsert({ id: user.id }).select().single());
         if (error) throw error;
+      }
+      // First Google sign-in: fill an empty profile with the Google name and photo.
+      const fill = {};
+      if (!data.display_name && metaName(user)) fill.display_name = metaName(user);
+      if (!data.avatar_url && /^https:\/\//i.test(metaPhoto(user))) fill.avatar_url = metaPhoto(user);
+      if (Object.keys(fill).length) {
+        const res = await sb.from("profiles").update(fill).eq("id", user.id).select().single();
+        if (!res.error) data = res.data;
       }
       profile = data;
       profileLoaded = true;
@@ -920,12 +946,15 @@
       showAuth();
       $("#authForm").classList.add("hidden");
       $(".auth-links").classList.add("hidden");
+      $("#oauthWrap").classList.add("hidden");
       authMsg("Could not load the login library. Check your connection and reload.", "err");
       return;
     }
     // Errors from an expired or reused email link come back in the URL hash.
+    // Google sign-in errors (e.g. "access denied") can arrive in the query string too.
     const hash = new URLSearchParams(location.hash.slice(1));
-    const linkError = hash.get("error_description");
+    const query = new URLSearchParams(location.search);
+    const linkError = hash.get("error_description") || query.get("error_description");
     const recovering = hash.get("type") === "recovery";
 
     sb.auth.onAuthStateChange((event, session) => {
@@ -935,7 +964,8 @@
     });
 
     const { data } = await sb.auth.getSession();
-    if (linkError || location.hash.includes("access_token")) history.replaceState(null, "", location.pathname + location.search);
+    ["error", "error_code", "error_description"].forEach((k) => query.delete(k));
+    if (linkError || location.hash.includes("access_token")) history.replaceState(null, "", location.pathname + (query.toString() ? `?${query}` : ""));
     if (recovering || authView === "reset") { recoveryEmail = data.session?.user?.email || ""; setAuthView("reset"); return; }
     if (data.session) { showApp(data.session.user); return; }
     setAuthView("signin");

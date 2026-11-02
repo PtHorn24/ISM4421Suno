@@ -12,3 +12,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# `npx netlify-cli dev` serves on http://localhost:5173 (matches the Google/Supabase settings).
+[dev]
+  port = 5173
